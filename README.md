@@ -12,8 +12,9 @@ _/  |_  ____       |    |____  |__|  |
  |__|  \____/  \________(____  /__|____/
                              \/
 ```
+</br>
 
-<p align="center" ><img height="20px" src="    https://ziadoua.github.io/m3-Markdown-Badges/badges/C/c2.svg"> <img height="20px" src="    https://ziadoua.github.io/m3-Markdown-Badges/badges/Linux/linux3.svg"> <img height="20px" src="    https://ziadoua.github.io/m3-Markdown-Badges/badges/Windows/windows3.svg">
+<p align="center" ><img height="20px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/C/c2.svg"> <img height="20px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Linux/linux3.svg"> <img height="20px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Windows/windows3.svg">
 </p>
 
 A Monopoly clone written in C.
