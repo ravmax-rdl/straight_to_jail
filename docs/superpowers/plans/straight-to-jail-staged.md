@@ -287,7 +287,7 @@ static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
 
 - [ ] **Step 17:** `game_init` — zero the `GameState`, call `board_init`, set the four players' names and strategies in
       Player 1–4 order, `cash = START_CASH`, `pos = 0`, `econ.interestRatePct = BASE_INTEREST_PCT`,
-      `econ.activeRegulation = -1`, `round = 0`.
+      `econ.incomeTaxPct = INCOME_TAX_PCT` (**D2′**), `econ.activeRegulation = -1`, `round = 0`.
 - [ ] **Step 18:** `determine_order` per Rule 2 and **D8′**. Every player rolls two dice; rank descending. **Only tied
       players reroll, and the reroll permutes only their own positions** — untied ranks never move. Repeat while ties
       remain. Print the §5 block; reroll rounds print the same `X rolls N.` line so ties are visible.
@@ -383,14 +383,18 @@ Run seeds 1, 7, 42, 99 — the first player must differ across seeds.
       until then a `false` return is reported and the charge skipped. Nothing else in the program touches `cash`.
 - [ ] **Step 2:** `effect_modifier` stub in `events.c` returning `0`, with the real signature. This lets milestone 2
       write the choke points in their **final** shape.
-- [ ] **Step 3:** `taxable_assets(g, p)` (**D16**) — sum of `square_value` over the **22 coloured properties** owned by
-      `p`. Buildings, railways and utilities excluded.
-- [ ] **Step 4:** `pay_income_tax` (**D2′**) — charge `pct_of(taxable_assets(g, p), rate)` where
-      `rate = apply_pct(INCOME_TAX_PCT, effect_modifier(EFF_TAX_MUL, ...))`. `pay_community_fund` (**D16**) — the same,
-      at `COMMUNITY_PCT`. Both are the same helper with a different rate.
+- [ ] **Step 3:** `total_assets(g, p)` (**D16**) — sum of `square_value` over the **22 coloured properties** owned by
+      `p`. Buildings, railways and utilities excluded. This is the Community Development Fund's base and nothing else's.
+- [ ] **Step 4:** The two tax squares take **different bases**, so they are two functions, not one parameterised helper:
+  - `pay_income_tax` (**D2′**) — charges `pct_of(players[p].cash, rate)` where
+    `rate = apply_pct(econ.incomeTaxPct, effect_modifier(EFF_TAX_MUL, ...))`.
+  - `pay_community_fund` (**D16**) — charges `pct_of(total_assets(g, p), COMMUNITY_PCT)`.
 
-> Both taxes read `square_value`, so they track the market automatically — which is exactly what the clarification
-> asks for when it says the 10% "will also be affected by the market fluctuations".
+> The Fund reads `square_value`, so it tracks the market automatically — exactly what the clarification means by "10%
+> will also be affected by the market fluctuations". Income Tax instead tracks the market through its *rate*:
+> `econ.incomeTaxPct` seeds at 15 and is moved by each inflation draw in milestone 4, the same way the loan rate is.
+> A cash-based tax also gives the two squares genuinely different characters — the Fund punishes landholding, Income
+> Tax punishes hoarding, which is the Conservative Banker's whole strategy.
 
 - [ ] **Step 5:** Add `land_on` to `game.c` as a `switch` on `g->board[sq].type` with **every enum case listed
       explicitly** and no `default:`, so adding a `SquareType` later produces a warning rather than silence. Implement
@@ -689,7 +693,8 @@ further turn. **Restore `START_CASH` to 30000 before committing.**
 > Premiums, repair costs and both tax bases need no separate handling — they derive from `square_value` and
 > `building_cost`, so they inflate automatically. That is the choke-point pattern paying for itself.
 
-- [ ] **Step 8:** Move `econ.interestRatePct` by the same factor, for **new loans only** (**D21**). Existing loans keep
+- [ ] **Step 8:** Move `econ.interestRatePct` **and `econ.incomeTaxPct`** by the same factor — the loan rate applies to
+      **new loans only** (**D21**), and the tax rate is what makes Income Tax "adjusted by inflation" (**D2′**). Existing loans keep
       `loan.ratePct` from issue (LK 13). This is the most commonly mis-implemented rule in the spec; the `Loan` struct
       owning its own `ratePct` is what makes it correct by construction.
 - [ ] **Step 9:** Print the announcement. §5 gives no template — match the economic-event voice:

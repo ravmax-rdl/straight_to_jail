@@ -15,9 +15,11 @@
  *
  * D1  Repair cost     50% of the current construction cost of the buildings
  *                     standing on the property                        [LK 10]
- * D2' Income Tax      SUPERSEDES the PDF. 15% of taxable assets (D16),
- *                     the rate itself market-adjusted; x1.5 under the
- *                     Increase Property Tax regulation               [Rule 11]
+ * D2' Income Tax      SUPERSEDES the PDF. 15% of the player's CURRENT CASH.
+ *                     The rate is held in econ.incomeTaxPct, seeded at 15,
+ *                     moved by inflation the way the loan rate is (D21),
+ *                     and further scaled at charge time by EFF_TAX_MUL --
+ *                     x1.5 under Increase Property Tax          [Rule 11]
  * D3  Coverage        Basic {Fire,Flood} @80%; Comprehensive
  *                     {Fire,Flood,Riot,Vandalism} @100%; Business
  *                     Interruption all perils @100% + 5 rounds of hotel
@@ -51,9 +53,11 @@
  * D14 Region tags     see REGION_* below                   [LK 18, Table 4]
  * D15 Claims recv.    always 0 -- compensation is credited immediately
  *                                                              [Rule 15]
- * D16 Taxable assets  sum of square_value over the 22 coloured properties
+ * D16 Total assets    the Community Development Fund's base, and its alone:
+ *                     sum of square_value over the 22 coloured properties
  *                     owned. Buildings, railways and utilities excluded.
- *                     Income Tax takes 15%, Community Dev. Fund takes 10%
+ *                     The Fund levies 10% of it. Income Tax uses cash (D2'),
+ *                     so the two squares have genuinely different bases
  * D17 Square 2        its own SQ_COMMUNITY type -- it draws no card. Card
  *                     squares are 7, 22 and 36 only              [Table 1]
  * D18 Value bases     individual price -> purchase, market value, rent
@@ -161,8 +165,8 @@ typedef enum {
 #define INS_ROUNDS          20   /* LK 9                                     */
 #define INS_WARN_ROUNDS      3   /* LK 9                                     */
 #define MAX_HOUSES           4   /* Rule 9                                   */
-#define INCOME_TAX_PCT      15   /* D2', D16                                 */
-#define COMMUNITY_PCT       10   /* D16                                      */
+#define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
+#define COMMUNITY_PCT       10   /* D16: of total property assets            */
 #define COND_DECAY_PCT       2   /* LK 25                                    */
 #define DEPREC_START_AGE    50   /* LK 16                                    */
 #define DEPREC_CAP_PCT      30   /* LK 16                                    */
@@ -251,6 +255,7 @@ typedef struct {
 typedef struct {
     int  inflationPct;            /* most recent draw, for the LK 36 block   */
     int  interestRatePct;         /* current rate for NEW loans only, D21    */
+    int  incomeTaxPct;            /* seeded at 15, inflation-adjusted, D2'   */
     int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
     int  lastBoomGroup, lastDeclineGroup;
     int  activeRegulation;        /* -1 = none                               */

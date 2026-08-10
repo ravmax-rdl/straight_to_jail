@@ -101,8 +101,8 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R2.8** Full colour group = monopoly = only then may build (Rule 8).
 - [ ] **R2.9** Even building across group; ≤4 houses; hotel replaces exactly 4 houses; never houses + hotel together (Rules 9–10).
 - [ ] **R2.10** Rent multipliers on base rent (Table 6): 1×/2×/3×/5×/7× for 0–4 houses; 10× hotel.
-- [ ] **R2.11** Income Tax = **15% of taxable assets** (decisions **D2′**, **D16**), payable immediately; shortfall → debt recovery (Rule 11, decision **D11**).
-- [ ] **R2.12** Community Development Fund = **10% of taxable assets** (decision **D16**), payable immediately, same shortfall handling.
+- [ ] **R2.11** Income Tax (square 4) = **15% of the player's current cash** (decision **D2′**), payable immediately; shortfall → debt recovery (Rule 11, decision **D11**). The rate is inflation-adjusted and scaled by the *Increase Property Tax* regulation.
+- [ ] **R2.12** Community Development Fund (square 2) = **10% of total assets** — the current market value of owned properties only, buildings excluded (decision **D16**) — payable immediately, same shortfall handling. Because the base is read through `square_value`, the levy tracks market fluctuations automatically.
 - [ ] **R2.13** Go To Jail → straight to square 10, no GO money (Rule 12).
 - [ ] **R2.14** Jail exit: pay LKR 300 bail, roll doubles, or wait 3 turns (Rule 13; after the 3rd turn see **D10**).
 - [ ] **R2.15** Bankruptcy when liabilities exceed assets: buildings removed, policies expire, loans due, assets transferred (Rule 14, **D11**).
@@ -188,7 +188,7 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 
 | ID | Was | Now |
 |----|-----|-----|
-| ~~**D2**~~ | Income Tax = LKR 1,000 base | **D2′** Income Tax = **15%** of taxable assets (**D16**), the rate itself moved by market conditions: ×1.5 under *Increase Property Tax*, and inflation-adjusted like every other rate |
+| ~~**D2**~~ | Income Tax = LKR 1,000 base | **D2′** Income Tax = **15% of the player's current cash**. The rate lives in `econ.incomeTaxPct`, seeded at 15, moved multiplicatively by each inflation draw exactly as the loan rate is (**D21**), and scaled again at charge time by `EFF_TAX_MUL` — ×1.5 under *Increase Property Tax* |
 | ~~**D6**~~ | All percentage math in `int`, truncating | **D6′** Money is **stored** as `int`. Ratio, interest and percentage arithmetic is computed in `double` and rounded to nearest at the boundary by one helper, `int money_round(double)`. No `math.h` (**R0.9**): rounding is `(int)(v + (v >= 0 ? 0.5 : -0.5))` |
 | ~~**D7**~~ | Base rent = 10% of group purchase price | **D7′** Individual purchase price and individual base rent come from `Rent.csv` (**R1.3**), hard-coded as a static table. The group figures are construction costs and mortgage value only |
 
@@ -208,7 +208,7 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 | **D13** | Order of end-of-round processing | Loan interest → default check → age/condition tick → insurance tick → auto-repairs → cadenced systems (5: depreciation; 10: inflation, market review, disaster; 15: national event, regional card; 20: regulation) → effect-duration tick → round summary → market conditions block |
 | **D14** | Events name regions the spec never maps to squares | `SOUTHERN_COASTAL` = {26, 27, 29}; `COASTAL` = southern + {6, 8, 9, 16, 34}; `LOW_LYING_COASTAL` = `COASTAL`; `COMMERCIAL` = {1, 3, 39} and the four railways where a card names stations; `NWSDB_ADJACENT` = {26, 27, 29} |
 | **D15** | "Insurance claims receivable" in net worth | Always 0 — LK 10 credits compensation immediately, and Business-Interruption lost rent is paid as an immediate lump sum |
-| **D16** | "Total assets" for the two tax squares | Sum of `square_value` over the **22 coloured properties** owned by the player. Buildings, railways and utilities are excluded. Because it reads `square_value`, the base tracks the market automatically. Income Tax takes 15%, the Community Development Fund takes 10% |
+| **D16** | "Total assets" for the Community Development Fund | Sum of `square_value` over the **22 coloured properties** owned by the player. Buildings, railways and utilities are excluded. Because it reads `square_value`, the base tracks the market automatically, which is what the clarification means by "10% will also be affected by the market fluctuations". This base belongs to the Fund alone — Income Tax charges cash (**D2′**), so the two squares are genuinely different instruments rather than the same tax at two rates |
 | **D17** | Square 2 typed "Event" but named Community Development Fund | Its own `SQ_COMMUNITY` type. It draws no card. Card squares are 7, 22 and 36 only |
 | **D18** | Which price governs which calculation | Individual price (`Rent.csv`) → purchase, market value, rent basis, renovation cost, tax base, auction opening. Group base price (App B) → mortgage value only, i.e. loan capacity and debt-recovery proceeds. Group columns also supply house and hotel construction cost |
 | **D19** | Whether durations count player turns or game rounds | One clock: the game round. A loan stores `issuedRound` and matures at `issuedRound + 20`; property age is `round − purchasedRound`. Player-scoped and global effects therefore need no separate counter, because every solvent player takes exactly one turn per round — the two readings coincide numerically and diverge only on bankruptcy, when the player has left the game |

@@ -162,6 +162,7 @@ typedef struct {                     /* a single timed modifier — see §5     
 typedef struct {
     int  inflationPct;               /* most recent draw, for the LK 36 block           */
     int  interestRatePct;            /* current rate for NEW loans only (D21)           */
+    int  incomeTaxPct;               /* seeded at 15, inflation-adjusted (D2')          */
     int  groupCooldown[GRP_COUNT];   /* LK 33: 30-round bar on re-selection             */
     int  lastBoomGroup, lastDeclineGroup;
     int  activeRegulation;           /* -1 = none                                       */
@@ -280,8 +281,8 @@ int mortgage_value (const GameState *g, int sq);
 Two derived helpers sit directly on top and are likewise the single home for their rule:
 
 ```c
-int taxable_assets (const GameState *g, int p);   /* D16: sum of square_value over owned properties */
-int repair_cost    (const GameState *g, int sq);  /* D1:  50% of construction cost on the square    */
+int total_assets (const GameState *g, int p);   /* D16: sum of square_value over owned properties */
+int repair_cost  (const GameState *g, int sq);  /* D1:  50% of construction cost on the square    */
 ```
 
 The reason this is a rule and not a suggestion: roughly a dozen call sites need a property's value
