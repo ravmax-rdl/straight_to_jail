@@ -277,4 +277,20 @@ typedef struct {
     int       round;               /* 1-based                                */
 } GameState;
 
+/* ----------------------------------------------------------- prototypes -- */
+
+/* Every public function in the program is declared here and nowhere else, so
+   a mismatch between what one module produces and another consumes fails the
+   build rather than diverging silently. */
+
+/* Buffers passed to fmt_lkr must be at least this large. */
+#define FMT_BUF 20
+
+/* finance.c -- the money boundary (D6'). These three are the only functions
+   in the program permitted to contain a double. */
+int         money_round(double v);
+int         apply_pct(int value, int percent);
+int         pct_of(int value, int percent);
+const char *fmt_lkr(char *buf, int amount);
+
 #endif /* TYPES_H */
