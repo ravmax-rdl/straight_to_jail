@@ -307,4 +307,8 @@ int roll_dice(int *d1, int *d2);
 /* board.c -- the board table. */
 void board_init(GameState *g);
 
+/* game.c -- the simulation engine. */
+void game_init(GameState *g);
+void determine_order(GameState *g);
+
 #endif /* TYPES_H */

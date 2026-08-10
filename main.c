@@ -12,6 +12,11 @@
 
 int main(int argc, char **argv)
 {
+    /* R0.4 forbids globals, so the entire mutable state of the simulation
+       lives here, on main's stack, and is threaded by pointer from now on.
+       About 7 KB -- comfortably inside any default stack. */
+    GameState g;
+
     /* R0.7: a seed on the command line makes a run reproducible, which is
        the whole verification strategy -- there is no test binary, because a
        glob build cannot tolerate a second main. Without one, vary by clock. */
@@ -28,6 +33,9 @@ int main(int argc, char **argv)
     printf("\n");
     printf("Each player begins with LKR 30,000.\n");
     printf("\n");
+
+    game_init(&g);
+    determine_order(&g);
 
     return 0;
 }
