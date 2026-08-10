@@ -1013,7 +1013,12 @@ exercises milestone 3's failure paths; if it never defaults in five seeds, `deci
 - [ ] **Step 8:** Check the details that are easy to get wrong and are graded: spaces around colons
       (`Cash : LKR 12,300`, never `Cash: LKR 12,300`); trailing full stops present on some lines and absent on others;
       which values sit on their own line; rule-line lengths (45 for the round summary, 41 for market conditions);
-      blank lines only where **D26** says.
+      blank lines only where **D26** says. Milestone 1 already measured all of these against `pdftotext -layout` output
+      and matched them exactly, so this step is a re-check, not a discovery.
+- [ ] **Step 8a:** Resolve the one block §5 cannot arbitrate. The `GAME OVER` template straddles a PDF page break and
+      extracts tight above it and blank-separated below it — the document contradicts itself. Milestone 1 emits it
+      compact, matching the round summary. If the lecturer can be asked, ask; otherwise leave it, and note that the
+      choice is confined to `final_report` and is a five-line change either way.
 - [ ] **Step 9:** Confirm no money prints without separators: `grep -nE 'LKR [0-9]{4,}' run.txt` must return nothing.
 - [ ] **Step 10:** Fix every mismatch found.
 
