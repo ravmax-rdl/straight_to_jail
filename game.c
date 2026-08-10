@@ -157,3 +157,60 @@ void determine_order(GameState *g)
         printf("%s\n", g->players[g->order[i]].name);
     }
 }
+
+/* --------------------------------------------------------- the loops ----- */
+
+/* Rule 3. Steps 2 and 3 only for now; the remaining six arrive with the
+   systems they depend on, in the order the milestones introduce them. */
+void play_turn(GameState *g, int p)
+{
+    int d1, d2, total;
+
+    total = roll_dice(&d1, &d2);
+    printf("%s rolled %d.\n", g->players[p].name, total);
+
+    move_player(g, p, total);
+}
+
+/* One round is one turn for every solvent player, in order[] sequence --
+   which is the clarification's definition, and the reason D19 needs only a
+   single clock: a player's own round count and the game's advance together,
+   diverging only when the player leaves the game entirely. */
+void play_round(GameState *g)
+{
+    int i;
+
+    g->round++;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        int p = g->order[i];
+        if (!g->players[p].bankrupt) {
+            play_turn(g, p);
+        }
+    }
+}
+
+/* Rule 15's first ending: the game stops when only one player is still
+   solvent. Nobody can go bankrupt yet, so this is always false until
+   milestone 3 -- but game_run is written against it now so the ending does
+   not need retrofitting later. */
+bool game_over(const GameState *g)
+{
+    int i, solvent = 0;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        if (!g->players[i].bankrupt) {
+            solvent++;
+        }
+    }
+    return solvent < 2;
+}
+
+void game_run(GameState *g)
+{
+    determine_order(g);
+
+    while (g->round < MAX_ROUNDS && !game_over(g)) {
+        play_round(g);
+    }
+}

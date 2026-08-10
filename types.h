@@ -304,11 +304,16 @@ int rng_range(int lo, int hi);
 int roll_die(void);
 int roll_dice(int *d1, int *d2);
 
-/* board.c -- the board table. */
+/* board.c -- the board table and movement. */
 void board_init(GameState *g);
+void move_player(GameState *g, int p, int steps);
 
 /* game.c -- the simulation engine. */
 void game_init(GameState *g);
 void determine_order(GameState *g);
+void play_turn(GameState *g, int p);
+void play_round(GameState *g);
+bool game_over(const GameState *g);
+void game_run(GameState *g);
 
 #endif /* TYPES_H */

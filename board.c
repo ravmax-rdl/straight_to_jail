@@ -2,6 +2,7 @@
  * and valuation queries every other module asks of it.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -200,5 +201,38 @@ void board_init(GameState *g)
             s->price         = STATION_PRICE;
             s->mortgageValue = STATION_MORTGAGE;
         }
+    }
+}
+
+/* ------------------------------------------------------------- movement -- */
+
+/* Rule 3 step 3 and Rule 4. Moves clockwise, wrapping, and pays the GO
+ * salary on a pass or a landing.
+ *
+ * The wrap test is the whole rule: with dice in [2,12] a move can never
+ * return a player to where they started, so to < from means exactly one
+ * thing -- the index wrapped past 39, which is passing GO. to == 0 catches
+ * landing on it squarely. Starting a turn on GO and moving off it satisfies
+ * neither, which is correct: Rule 4 pays for passing or landing, not for
+ * standing there.
+ *
+ * Rule 12's Go To Jail deliberately does not come through here. A player
+ * sent to jail is transferred, not walked, and collects nothing.
+ */
+void move_player(GameState *g, int p, int steps)
+{
+    char    b[FMT_BUF];
+    Player *pl   = &g->players[p];
+    int     from = pl->pos;
+    int     to   = (from + steps) % NUM_SQUARES;
+
+    printf("%s moves from Square %d to Square %d.\n", pl->name, from, to);
+    pl->pos = to;
+
+    if (to < from || to == SQ_IDX_GO) {
+        pl->cash += GO_SALARY;
+        printf("%s passed GO.\n", pl->name);
+        printf("Collected LKR %s.\n", fmt_lkr(b, GO_SALARY));
+        printf("Current Balance : LKR %s.\n", fmt_lkr(b, pl->cash));
     }
 }

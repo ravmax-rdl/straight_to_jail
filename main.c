@@ -35,7 +35,7 @@ int main(int argc, char **argv)
     printf("\n");
 
     game_init(&g);
-    determine_order(&g);
+    game_run(&g);
 
     return 0;
 }
