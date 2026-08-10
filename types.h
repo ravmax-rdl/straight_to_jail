@@ -293,4 +293,10 @@ int         apply_pct(int value, int percent);
 int         pct_of(int value, int percent);
 const char *fmt_lkr(char *buf, int amount);
 
+/* board.c -- randomness. Seeded once in main; every random draw in the
+   program goes through rng_range so the bias fix applies everywhere. */
+int rng_range(int lo, int hi);
+int roll_die(void);
+int roll_dice(int *d1, int *d2);
+
 #endif /* TYPES_H */
