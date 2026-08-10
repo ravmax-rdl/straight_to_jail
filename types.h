@@ -81,4 +81,200 @@
  *                     LaTeX spacing between verbatim chunks, not content
  * ------------------------------------------------------------------------ */
 
+#include <stdbool.h>
+
+/* ---------------------------------------------------------------- enums -- */
+
+/* D17: SQ_COMMUNITY is distinct from SQ_EVENT. Table 1 types square 2 as
+   "Event", but it levies a tax rather than drawing a card, so the three card
+   squares are 7, 22 and 36 only. */
+typedef enum {
+    SQ_GO, SQ_PROPERTY, SQ_RAILWAY, SQ_UTILITY, SQ_BANK, SQ_INSURANCE,
+    SQ_TAX, SQ_COMMUNITY, SQ_EVENT, SQ_JAIL, SQ_PARKING, SQ_GOTOJAIL
+} SquareType;
+
+/* GRP_NONE is -1 so that colour groups index arrays directly from zero.
+   GRP_COUNT is the array-sizing sentinel. */
+typedef enum {
+    GRP_NONE = -1,
+    GRP_BROWN = 0, GRP_LIGHTBLUE, GRP_PINK, GRP_ORANGE,
+    GRP_RED, GRP_YELLOW, GRP_GREEN, GRP_DARKBLUE,
+    GRP_COUNT
+} PropertyGroup;
+
+typedef enum { INS_NONE, INS_BASIC, INS_COMPREHENSIVE, INS_BUSINESS } InsuranceType;
+
+typedef enum {
+    STRAT_AGGRESSIVE, STRAT_CONSERVATIVE, STRAT_RISKTAKER, STRAT_OPPORTUNIST
+} Strategy;
+
+typedef enum {
+    DIS_FIRE, DIS_FLOOD, DIS_RIOT, DIS_COLLAPSE, DIS_ELECTRICAL, DIS_COUNT
+} Disaster;
+
+/* Every timed economic modifier in the game reduces to one of these kinds.
+   D21: both interest kinds exist deliberately. Large event shifts are
+   relative (MUL); LK 24's and Appendix A's explicit +/-2% adjustments are
+   percentage points (ADD), because a relative 2% rounds to a no-op. ADD is
+   applied before MUL.
+   EFF_MAX_PROPERTIES reuses Effect.magnitudePct as a plain count, not a
+   percentage -- it carries the Anti-Speculation Act's cap of 3. */
+typedef enum {
+    EFF_VALUE_MUL, EFF_RENT_MUL, EFF_HOTEL_RENT_MUL, EFF_RAILWAY_RENT_MUL,
+    EFF_UTILITY_RENT_MUL, EFF_BUILD_COST_MUL, EFF_PREMIUM_MUL, EFF_MORTGAGE_MUL,
+    EFF_AUCTION_OPEN_MUL, EFF_INTEREST_MUL, EFF_INTEREST_ADD, EFF_TAX_MUL,
+    EFF_CLOSED, EFF_CONSTRUCTION_SUSPENDED, EFF_MAX_PROPERTIES,
+    EFF_FLOOD_RISK, EFF_RIOT_RISK,
+    EFF_KIND_COUNT
+} EffectKind;
+
+typedef enum {
+    SCOPE_GLOBAL, SCOPE_GROUP, SCOPE_REGION, SCOPE_SQUARE, SCOPE_PLAYER
+} EffectScope;
+
+/* D14 region tags. A bitmask rather than an enum because a square belongs to
+   several regions at once -- Trincomalee is northern, eastern and coastal. */
+#define REGION_WESTERN          0x01u
+#define REGION_CENTRAL          0x02u
+#define REGION_SOUTHERN_COASTAL 0x04u
+#define REGION_NORTHERN         0x08u
+#define REGION_EASTERN          0x10u
+#define REGION_COMMERCIAL       0x20u
+#define REGION_NWSDB_ADJACENT   0x40u
+#define REGION_COASTAL          0x80u
+
+/* ------------------------------------------------------------ constants -- */
+
+#define NUM_SQUARES         40
+#define NUM_PLAYERS          4
+#define NUM_PROPERTIES      22
+#define MAX_ROUNDS         500   /* Rule 15                                  */
+#define START_CASH       30000   /* Rule 1                                   */
+#define GO_SALARY         2000   /* Rule 4                                   */
+#define JAIL_BAIL          300   /* Rule 13                                  */
+#define JAIL_MAX_TURNS       3   /* Rule 13                                  */
+#define AUCTION_INC        250   /* LK 20                                    */
+#define AUCTION_OPEN_PCT    50   /* LK 19                                    */
+#define LOAN_LTV_PCT        75   /* LK 2, D5                                 */
+#define LOAN_ROUNDS         20   /* LK 4, D19                                */
+#define BASE_INTEREST_PCT    8   /* Table 9 Stable Economy, D21              */
+#define INS_ROUNDS          20   /* LK 9                                     */
+#define INS_WARN_ROUNDS      3   /* LK 9                                     */
+#define MAX_HOUSES           4   /* Rule 9                                   */
+#define INCOME_TAX_PCT      15   /* D2', D16                                 */
+#define COMMUNITY_PCT       10   /* D16                                      */
+#define COND_DECAY_PCT       2   /* LK 25                                    */
+#define DEPREC_START_AGE    50   /* LK 16                                    */
+#define DEPREC_CAP_PCT      30   /* LK 16                                    */
+#define RENOVATE_PCT        10   /* LK 17                                    */
+#define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
+#define MARKET_COOLDOWN     30   /* LK 33                                    */
+#define DECK_SIZE           20   /* App A                                    */
+#define STATION_PRICE     1500   /* clarification: railways and utilities    */
+#define STATION_MORTGAGE   750   /* clarification: 50% of station price      */
+
+/* Worst case: 4 players holding several card effects each, plus the four
+   global cadenced systems, plus up to three square-scoped regional effects.
+   Sized with headroom; a DEBUG assert catches overflow rather than dropping
+   an effect silently. */
+#define MAX_EFFECTS        128
+
+/* Board indices that rules name directly. */
+#define SQ_IDX_GO            0
+#define SQ_IDX_JAIL         10
+#define SQ_IDX_BANK         38
+
+/* -------------------------------------------------------------- structs -- */
+
+/* One board square. The property fields sit idle on the 18 non-property
+   squares; a union would save under 1 KB and cost a discriminated-access
+   dance on every read, which is a bad trade when simplicity is the graded
+   quality. */
+typedef struct {
+    SquareType    type;
+    const char   *name;
+    PropertyGroup group;          /* GRP_NONE for non-properties             */
+    unsigned      regions;        /* REGION_* bitmask, D14                   */
+
+    /* Permanent-adjusted stored values. Only inflation mutates these (D12).
+       D18: price and baseRent are INDIVIDUAL, from Rent.csv. mortgageValue,
+       houseCost and hotelCost come from the group table in Appendix B. */
+    int price, baseRent, mortgageValue, houseCost, hotelCost;
+
+    int  owner;                   /* -1 = Bank                               */
+    int  purchasedRound;          /* -1 = unowned. D19: age is derived from
+                                     this, so it cannot disagree with owner. */
+    int  houses;                  /* 0..4, mutually exclusive with hotel     */
+    bool hotel;
+    bool mortgaged, loanLocked, damaged, structDamaged;
+
+    int  depreciationPct;         /* LK 16, capped at DEPREC_CAP_PCT         */
+    int  conditionPct;            /* LK 25, starts at 100                    */
+    int  unmaintainedRounds;      /* LK 28 counter                           */
+
+    InsuranceType policy;
+    int           policyRounds;
+} Square;
+
+typedef struct {
+    bool active;
+    int  principal;               /* grows every round at ratePct            */
+    int  ratePct;                 /* frozen at issue -- LK 13                */
+    int  issuedRound;             /* D19: matures at issuedRound + termRounds */
+    int  termRounds;              /* 20, extended by the LK 5 extend action  */
+} Loan;
+
+typedef struct {
+    const char *name;
+    Strategy    strat;
+    int  cash, pos, jailTurns, taxesDue;
+    bool bankrupt, jailed;
+    bool sufferedLoss;            /* gates the Risk Taker's insurance, 3.3   */
+    Loan loan;
+} Player;
+
+/* A single timed modifier. Every timed system in the game -- booms, declines,
+   regional cards, national events, event cards, regulations -- reduces to
+   pushing one of these. See the architecture document section 5 for why a
+   flat set of Economy fields cannot work: Appendix A cards are per-player and
+   overlapping, and LK 34 requires concurrent effects to stack rather than
+   overwrite. */
+typedef struct {
+    EffectKind kind;
+    int  scopeKind;               /* an EffectScope                          */
+    int  scope;                   /* group index, region mask, square, player */
+    int  magnitudePct;            /* signed: +25, -15                        */
+    int  owner;                   /* -1 = everyone                           */
+    int  roundsLeft;
+} Effect;
+
+typedef struct {
+    int  inflationPct;            /* most recent draw, for the LK 36 block   */
+    int  interestRatePct;         /* current rate for NEW loans only, D21    */
+    int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
+    int  lastBoomGroup, lastDeclineGroup;
+    int  activeRegulation;        /* -1 = none                               */
+    Effect effects[MAX_EFFECTS];
+    int    effectCount;
+} Economy;
+
+/* App A's "returned to the bottom of the deck" over a fixed array: nothing
+   moves, only the head index advances. No linked list, no allocation (R0.5). */
+typedef struct {
+    int cards[DECK_SIZE];
+    int head;
+} EventDeck;
+
+/* The entire mutable state of the simulation. One of these lives on main's
+   stack and is threaded by pointer through every function -- R0.4 forbids
+   globals, and this is what replaces them. */
+typedef struct {
+    Square    board[NUM_SQUARES];
+    Player    players[NUM_PLAYERS];
+    int       order[NUM_PLAYERS];  /* player indices in turn order            */
+    Economy   econ;
+    EventDeck deck;
+    int       round;               /* 1-based                                */
+} GameState;
+
 #endif /* TYPES_H */
