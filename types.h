@@ -299,4 +299,7 @@ int rng_range(int lo, int hi);
 int roll_die(void);
 int roll_dice(int *d1, int *d2);
 
+/* board.c -- the board table. */
+void board_init(GameState *g);
+
 #endif /* TYPES_H */
