@@ -101,9 +101,9 @@ round-end blocks and a final report.
 
 ### 1.1 Skeleton and the decision block
 
-- [ ] **Step 1:** Write `types.h` with a header guard and a top comment block recording decisions D1–D26 in one line
+- [x] **Step 1:** Write `types.h` with a header guard and a top comment block recording decisions D1–D26 in one line
       each, citing the rule it resolves. Mark **D2′, D6′, D7′** explicitly as *supersedes the PDF*.
-- [ ] **Step 2:** Write `main.c`: seed, `GameState g` on the stack, `game_init`, `game_run`. Print the §5 pre-game block
+- [x] **Step 2:** Write `main.c`: seed, `GameState g` on the stack, `game_init`, `game_run`. Print the §5 pre-game block
       **exactly** — note the spaces around each colon, and that `MONOPOLY-LK Simulation` is line 1.
 
 ```
@@ -117,15 +117,15 @@ Player 4 : Opportunistic Trader
 Each player begins with LKR 30,000.
 ```
 
-- [ ] **Step 3:** Delete the ASCII-art banner. If it is worth keeping, guard it with `#ifdef SPLASH` — the graded build
+- [x] **Step 3:** Delete the ASCII-art banner. If it is worth keeping, guard it with `#ifdef SPLASH` — the graded build
       never defines it.
-- [ ] **Step 4:** Write `Makefile` (tabs, not spaces): `monopoly` uses the canonical glob line; `straight_to_jail` and
+- [x] **Step 4:** Write `Makefile` (tabs, not spaces): `monopoly` uses the canonical glob line; `straight_to_jail` and
       `debug` (`-g -DDEBUG`) are conveniences; `clean` removes both binaries. Add `.gitignore` for `monopoly`,
       `straight_to_jail`, `*.exe`, `*.o`.
 
 ### 1.2 Types, constants, money and dice
 
-- [ ] **Step 5:** Add the enums to `types.h`. Note `SQ_COMMUNITY` is distinct from `SQ_EVENT` (**D17**).
+- [x] **Step 5:** Add the enums to `types.h`. Note `SQ_COMMUNITY` is distinct from `SQ_EVENT` (**D17**).
 
 ```c
 typedef enum {
@@ -171,7 +171,7 @@ adjustments from LK 24 and App A are percentage points (`ADD`), because a relati
 shifts apply first, then multiplicative. `EFF_MAX_PROPERTIES` reuses `magnitudePct` as a plain count — note that in a
 comment.
 
-- [ ] **Step 6:** Add the constants, each with a rule citation.
+- [x] **Step 6:** Add the constants, each with a rule citation.
 
 ```c
 #define NUM_SQUARES     40
@@ -203,9 +203,9 @@ comment.
 #define STATION_MORTGAGE 750   /* clarification */
 ```
 
-- [ ] **Step 7:** Add the `Square`, `Loan`, `Player`, `Effect`, `Economy`, `EventDeck`, `GameState` structs exactly as in
+- [x] **Step 7:** Add the `Square`, `Loan`, `Player`, `Effect`, `Economy`, `EventDeck`, `GameState` structs exactly as in
       [architecture §4](../specs/straight-to-jail-architecture-design.md).
-- [ ] **Step 8:** Implement the money boundary in `finance.c` (**D6′**). These three are the *only* functions in the
+- [x] **Step 8:** Implement the money boundary in `finance.c` (**D6′**). These three are the *only* functions in the
       program containing a `double`.
 
 ```c
@@ -214,16 +214,16 @@ int apply_pct (int value, int p) { return money_round(value * (1.0 + p / 100.0))
 int pct_of    (int value, int p) { return money_round(value * (p / 100.0));        }
 ```
 
-- [ ] **Step 9:** Implement `fmt_lkr(char *buf, int amount)` in `finance.c` — thousands separators, no currency prefix
+- [x] **Step 9:** Implement `fmt_lkr(char *buf, int amount)` in `finance.c` — thousands separators, no currency prefix
       (callers supply `LKR `), handles zero and negatives. `buf` must be ≥ 20 bytes.
-- [ ] **Step 10:** Implement `rng_range(lo, hi)` in `board.c` with a rejection loop (no modulo bias), plus `roll_die`
+- [x] **Step 10:** Implement `rng_range(lo, hi)` in `board.c` with a rejection loop (no modulo bias), plus `roll_die`
       and `roll_dice(int *d1, int *d2)`.
-- [ ] **Step 11:** Temporary check block in `main`: print `fmt_lkr` for `0, 5, 999, 1000, 30000, 1234567, -2500`, and a
+- [x] **Step 11:** Temporary check block in `main`: print `fmt_lkr` for `0, 5, 999, 1000, 30000, 1234567, -2500`, and a
       tally of 6,000 `roll_dice` totals. Confirm, then **delete the block**.
 
 ### 1.3 The board table
 
-- [ ] **Step 12:** Add two file-local tables to `board.c`. The group table supplies **only** construction costs and
+- [x] **Step 12:** Add two file-local tables to `board.c`. The group table supplies **only** construction costs and
       mortgage value (**D18**); its base price column is retained for reference and loan documentation.
 
 ```c
@@ -254,11 +254,11 @@ static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
 };
 ```
 
-- [ ] **Step 13:** Write `board_init` filling all 40 squares from the R1.1 table. Properties take `price` and `baseRent`
+- [x] **Step 13:** Write `board_init` filling all 40 squares from the R1.1 table. Properties take `price` and `baseRent`
       from `PROPERTY_VALUES` and `mortgageValue`/`houseCost`/`hotelCost` from `GROUP_VALUES[group]`. Railways and
       utilities take `price = STATION_PRICE`, `mortgageValue = STATION_MORTGAGE`. Every square gets `owner = -1`,
       `purchasedRound = -1`, `conditionPct = 100`, `policy = INS_NONE`, everything else zero.
-- [ ] **Step 14:** Apply the **D14** region bitmasks:
+- [x] **Step 14:** Apply the **D14** region bitmasks:
 
 | Squares | Tags |
 |---------|------|
@@ -274,9 +274,9 @@ static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
 | 37 Nuwara Eliya | `CENTRAL` |
 | 5, 15, 25, 35 railways | `COMMERCIAL` |
 
-- [ ] **Step 15:** Temporary dump block in `main` printing `index | type | name | group | price | baseRent | mortgage |
+- [x] **Step 15:** Temporary dump block in `main` printing `index | type | name | group | price | baseRent | mortgage |
       regions` for all 40 squares. Check line-by-line against R1.1 and R1.3.
-- [ ] **Step 16:** Confirm the totals: 22 properties, 4 railways, 2 utilities, 1 bank, 2 insurance, 1 tax, 1 community,
+- [x] **Step 16:** Confirm the totals: 22 properties, 4 railways, 2 utilities, 1 bank, 2 insurance, 1 tax, 1 community,
       3 event, 4 special = 40. Group counts: Brown 2, Light Blue 3, Pink 3, Orange 3, Red 3, Yellow 3, Green 3,
       Dark Blue 2 = 22. Then delete the dump.
 
@@ -285,10 +285,10 @@ static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
 
 ### 1.4 Roll-off, loops, movement
 
-- [ ] **Step 17:** `game_init` — zero the `GameState`, call `board_init`, set the four players' names and strategies in
+- [x] **Step 17:** `game_init` — zero the `GameState`, call `board_init`, set the four players' names and strategies in
       Player 1–4 order, `cash = START_CASH`, `pos = 0`, `econ.interestRatePct = BASE_INTEREST_PCT`,
       `econ.incomeTaxPct = INCOME_TAX_PCT` (**D2′**), `econ.activeRegulation = -1`, `round = 0`.
-- [ ] **Step 18:** `determine_order` per Rule 2 and **D8′**. Every player rolls two dice; rank descending. **Only tied
+- [x] **Step 18:** `determine_order` per Rule 2 and **D8′**. Every player rolls two dice; rank descending. **Only tied
       players reroll, and the reroll permutes only their own positions** — untied ranks never move. Repeat while ties
       remain. Print the §5 block; reroll rounds print the same `X rolls N.` line so ties are visible.
 
@@ -307,7 +307,7 @@ Aggressive Investor
 Conservative Banker
 ```
 
-- [ ] **Step 19:** `move_player` — record `from`, compute `to = (from + steps) % NUM_SQUARES`, print the movement line,
+- [x] **Step 19:** `move_player` — record `from`, compute `to = (from + steps) % NUM_SQUARES`, print the movement line,
       then credit GO if `to < from || to == 0` (Rule 4).
 
 ```
@@ -317,15 +317,15 @@ Collected LKR 2,000.
 Current Balance : LKR 24,500.
 ```
 
-- [ ] **Step 20:** `play_turn` — Rule 3 steps 2–3 only for now: roll, print `%s rolled %d.`, move.
-- [ ] **Step 21:** `play_round` — increment `g->round`, then loop `g->order[]` calling `play_turn` for each non-bankrupt
+- [x] **Step 20:** `play_turn` — Rule 3 steps 2–3 only for now: roll, print `%s rolled %d.`, move.
+- [x] **Step 21:** `play_round` — increment `g->round`, then loop `g->order[]` calling `play_turn` for each non-bankrupt
       player. `game_over` — true when fewer than two players are solvent. `game_run` — loop while
       `g->round < MAX_ROUNDS && !game_over(g)`.
 
 ### 1.5 Round-end blocks and the final report
 
-- [ ] **Step 22:** `net_worth` v1 returns `players[p].cash`. Milestones 2 and 3 extend it; the signature never changes.
-- [ ] **Step 23:** `round_summary` — the §5 block, **compact** (**D26**). 45 `=` characters, 45 `-` between players,
+- [x] **Step 22:** `net_worth` v1 returns `players[p].cash`. Milestones 2 and 3 extend it; the signature never changes.
+- [x] **Step 23:** `round_summary` — the §5 block, **compact** (**D26**). 45 `=` characters, 45 `-` between players,
       no separator after the last player before the closing `=` line. Players print in `order[]` sequence.
       `Outstanding Loan` prints `None` when there is no loan — **not** `LKR 0`.
 
@@ -344,10 +344,10 @@ Outstanding Loan : LKR 6,500
 =============================================
 ```
 
-- [ ] **Step 24:** `market_conditions` skeleton — the LK 36 block with 41-character rules. Inflation shows `+0%`,
+- [x] **Step 24:** `market_conditions` skeleton — the LK 36 block with 41-character rules. Inflation shows `+0%`,
       Current Loan Interest shows `8%`, the other three sections are empty until milestone 4.
-- [ ] **Step 25:** Call `round_summary` then `market_conditions` at the end of `play_round`.
-- [ ] **Step 26:** `final_report` — the §5 GAME OVER block. Winner is the last solvent player, or the highest
+- [x] **Step 25:** Call `round_summary` then `market_conditions` at the end of `play_round`.
+- [x] **Step 26:** `final_report` — the §5 GAME OVER block. Winner is the last solvent player, or the highest
       `net_worth` after 500 rounds. Note this block puts labels and values on **separate** lines, unlike the summary.
       Call it from `game_run` after the loop.
 
