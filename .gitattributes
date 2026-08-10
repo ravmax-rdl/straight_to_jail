@@ -1,0 +1,5 @@
+# Keep LF in the working tree. A Makefile whose recipe lines end CRLF fails to
+# parse under some make implementations, and the build must not depend on which
+# machine checked the repository out.
+* text=auto eol=lf
+*.pdf binary
