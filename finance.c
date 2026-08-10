@@ -41,6 +41,22 @@ int pct_of(int value, int percent)
     return money_round((double)value * (percent / 100.0));
 }
 
+/* Rule 15's balance sheet:
+ *   cash + property + buildings + railway + utility + claims receivable
+ *        - loans - accrued interest - taxes due
+ *
+ * Built up across three milestones without ever changing this signature.
+ * Version 1 is cash alone, because cash is all a player can own yet.
+ * Milestone 2 adds owned squares at square_value; milestone 3 adds building
+ * book value and subtracts the loan. Claims receivable is permanently 0 by
+ * D15 -- LK 10 credits compensation immediately, so nothing is ever
+ * outstanding to receive.
+ */
+int net_worth(const GameState *g, int p)
+{
+    return g->players[p].cash;
+}
+
 /* R5.3: render an amount with thousands separators, no currency prefix --
  * callers supply "LKR ". Returns buf so it can be used inline in a printf.
  *

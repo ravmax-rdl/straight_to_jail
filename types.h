@@ -297,6 +297,7 @@ int         money_round(double v);
 int         apply_pct(int value, int percent);
 int         pct_of(int value, int percent);
 const char *fmt_lkr(char *buf, int amount);
+int         net_worth(const GameState *g, int p);
 
 /* board.c -- randomness. Seeded once in main; every random draw in the
    program goes through rng_range so the bias fix applies everywhere. */
@@ -315,5 +316,8 @@ void play_turn(GameState *g, int p);
 void play_round(GameState *g);
 bool game_over(const GameState *g);
 void game_run(GameState *g);
+void round_summary(const GameState *g);
+void market_conditions(const GameState *g);
+void final_report(const GameState *g);
 
 #endif /* TYPES_H */

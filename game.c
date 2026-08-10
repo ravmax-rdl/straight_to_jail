@@ -158,6 +158,174 @@ void determine_order(GameState *g)
     }
 }
 
+/* ------------------------------------------------------- block output ---- */
+
+/* Rule-line widths, measured from the section 5 templates rather than
+   guessed: the round summary uses 45 characters and the market conditions
+   block uses 41. Extracting the PDF's text confirmed both, and confirmed
+   that the round summary's field lines are consecutive -- the vertical gaps
+   in the rendered PDF are LaTeX spacing, not content. That is D26. */
+#define SUMMARY_RULE 45
+#define MARKET_RULE  41
+
+static void rule_line(char c, int n)
+{
+    int i;
+    for (i = 0; i < n; i++) {
+        putchar(c);
+    }
+    putchar('\n');
+}
+
+/* Counted directly off the board rather than cached on the Player, so the
+   figure cannot drift from reality after a foreclosure or an auction. */
+static int count_properties(const GameState *g, int p)
+{
+    int i, n = 0;
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].type == SQ_PROPERTY && g->board[i].owner == p) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static int count_hotels(const GameState *g, int p)
+{
+    int i, n = 0;
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p && g->board[i].hotel) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* Milestone 2 swaps the stored price for square_value once the choke point
+   exists; until then nothing is owned and both read zero. */
+static int total_property_value(const GameState *g, int p)
+{
+    int i, total = 0;
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p) {
+            total += g->board[i].price;
+        }
+    }
+    return total;
+}
+
+/* Section 5 "End of Every Round". Players print in turn order, and the
+   separator falls between players only -- there is none after the last one,
+   because the closing rule already terminates the block. */
+void round_summary(const GameState *g)
+{
+    char b[FMT_BUF];
+    int  i;
+
+    rule_line('=', SUMMARY_RULE);
+    printf("Round %d Summary\n", g->round);
+    rule_line('=', SUMMARY_RULE);
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        const Player *pl = &g->players[g->order[i]];
+        int           p  = g->order[i];
+
+        printf("%s\n", pl->name);
+        printf("Cash : LKR %s\n", fmt_lkr(b, pl->cash));
+        printf("Net Worth : LKR %s\n", fmt_lkr(b, net_worth(g, p)));
+        printf("Properties : %d\n", count_properties(g, p));
+        printf("Hotels : %d\n", count_hotels(g, p));
+
+        /* "None", never "LKR 0" -- the template is explicit about this and
+           a zero would also be a lie, since a settled loan is not a loan. */
+        if (pl->loan.active) {
+            printf("Outstanding Loan : LKR %s\n", fmt_lkr(b, pl->loan.principal));
+        } else {
+            printf("Outstanding Loan : None\n");
+        }
+
+        if (i < NUM_PLAYERS - 1) {
+            rule_line('-', SUMMARY_RULE);
+        }
+    }
+
+    rule_line('=', SUMMARY_RULE);
+}
+
+/* Rule-LK 36, printed at the end of every round immediately after the
+ * summary.
+ *
+ * The underline widths are literal. They are not label length plus a
+ * constant -- the five run 13, 16, 23, 12 and 23 against labels of 11, 14,
+ * 20, 9 and 21 -- so they are transcribed from the template rather than
+ * computed, and a comment says so to stop a later reader "fixing" them.
+ *
+ * Milestone 4 fills the first three sections from the effect registry. Until
+ * then only the two scalar rates have anything to report, and a section with
+ * nothing active prints nothing at all.
+ */
+void market_conditions(const GameState *g)
+{
+    rule_line('=', MARKET_RULE);
+    printf("Current Market Conditions\n");
+    rule_line('=', MARKET_RULE);
+    printf("\n");
+
+    /* Market Boom, Market Decline and Regional Development arrive with the
+       effect registry in milestone 4. */
+
+    printf("Inflation\n");
+    rule_line('-', 12);
+    printf("%+d%%\n", g->econ.inflationPct);
+    printf("\n");
+
+    printf("Current Loan Interest\n");
+    rule_line('-', 23);
+    printf("%d%%\n", g->econ.interestRatePct);
+    printf("\n");
+
+    rule_line('=', MARKET_RULE);
+}
+
+/* Section 5 "End of Game". Note this block puts labels and values on
+   separate lines, unlike the round summary's "Label : value" pairs. */
+void final_report(const GameState *g)
+{
+    char b[FMT_BUF];
+    int  i, winner = g->order[0];
+
+    /* Rule 15 has two endings and one tiebreak between them. If a single
+       player is still solvent they win outright; otherwise 500 rounds have
+       elapsed and the highest net worth takes it. Scanning for the best net
+       worth among the solvent covers both cases in one pass. */
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        if (g->players[i].bankrupt) {
+            continue;
+        }
+        if (g->players[winner].bankrupt || net_worth(g, i) > net_worth(g, winner)) {
+            winner = i;
+        }
+    }
+
+    rule_line('=', SUMMARY_RULE);
+    printf("GAME OVER\n");
+    printf("Winner\n");
+    printf("%s\n", g->players[winner].name);
+    printf("Total Cash\n");
+    printf("LKR %s\n", fmt_lkr(b, g->players[winner].cash));
+    printf("Total Property Value\n");
+    printf("LKR %s\n", fmt_lkr(b, total_property_value(g, winner)));
+    printf("Outstanding Loans\n");
+    if (g->players[winner].loan.active) {
+        printf("LKR %s\n", fmt_lkr(b, g->players[winner].loan.principal));
+    } else {
+        printf("None\n");
+    }
+    printf("Net Worth\n");
+    printf("LKR %s\n", fmt_lkr(b, net_worth(g, winner)));
+    rule_line('=', SUMMARY_RULE);
+}
+
 /* --------------------------------------------------------- the loops ----- */
 
 /* Rule 3. Steps 2 and 3 only for now; the remaining six arrive with the
@@ -188,6 +356,11 @@ void play_round(GameState *g)
             play_turn(g, p);
         }
     }
+
+    /* D13 puts these last and in this order. The economic cadences slot in
+       above them as the milestones introduce them. */
+    round_summary(g);
+    market_conditions(g);
 }
 
 /* Rule 15's first ending: the game stops when only one player is still
@@ -213,4 +386,6 @@ void game_run(GameState *g)
     while (g->round < MAX_ROUNDS && !game_over(g)) {
         play_round(g);
     }
+
+    final_report(g);
 }
