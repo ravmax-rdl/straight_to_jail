@@ -410,13 +410,71 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
     case SQ_PARKING:
         break;
 
+    /* Rule 12: transferred, not walked. Deliberately not move_player -- that
+       would pay the GO salary on the way round, and Rule 12 says the player
+       does not collect it. */
+    case SQ_GOTOJAIL:
+        g->players[p].pos       = SQ_IDX_JAIL;
+        g->players[p].jailed    = true;
+        g->players[p].jailTurns = 0;
+        printf("%s was sent to Jail.\n", g->players[p].name);
+        break;
+
     /* Still to come, each in its own step. */
     case SQ_BANK:
     case SQ_INSURANCE:
     case SQ_EVENT:
-    case SQ_GOTOJAIL:
         break;
     }
+}
+
+/* ---------------------------------------------------------------- jail -- */
+
+/* Rule 3 step 1, for a jailed player. Returns whether they are free to move
+ * this turn; the dice have already been rolled by the caller.
+ *
+ * Rule 13 gives three ways out, and this takes them in the order that costs
+ * the player least: doubles are free, bail costs 300, and waiting costs a
+ * turn. D10 settles what the rule leaves open -- after the third failed
+ * turn bail is paid automatically, so nobody sits in Jail forever.
+ *
+ * The dice come in rather than being rolled here. Rolling separately would
+ * give a released player two rolls in one turn, and returning "the turn is
+ * over" after a doubles release would skip Rule 3 steps 4-7 -- the player
+ * would move and then sail past whatever they landed on, paying no rent and
+ * buying nothing. One roll, one move, one landing.
+ */
+static bool resolve_jail(GameState *g, int p, int d1, int d2)
+{
+    char    b[FMT_BUF];
+    Player *pl = &g->players[p];
+
+    if (!pl->jailed) {
+        return true;
+    }
+
+    if (d1 == d2) {                             /* Rule 13: doubles       */
+        pl->jailed = false;
+        printf("%s rolled doubles and left Jail.\n", pl->name);
+        return true;
+    }
+
+    if (charge(g, p, JAIL_BAIL, -1)) {          /* Rule 13: pay the bail  */
+        pl->jailed = false;
+        printf("%s paid LKR %s bail.\n", pl->name, fmt_lkr(b, JAIL_BAIL));
+        return true;
+    }
+
+    pl->jailTurns++;
+    if (pl->jailTurns >= JAIL_MAX_TURNS) {      /* D10: served the wait   */
+        pl->jailed    = false;
+        pl->jailTurns = 0;
+        printf("%s has served three turns and leaves Jail.\n", pl->name);
+        return true;
+    }
+
+    printf("%s is in Jail.\n", pl->name);
+    return false;
 }
 
 /* ------------------------------------------------------------- a turn --- */
@@ -429,6 +487,13 @@ void play_turn(GameState *g, int p)
 
     total = roll_dice(&d1, &d2);                    /* 2. roll two dice   */
     printf("%s rolled %d.\n", g->players[p].name, total);
+
+    /* 1. resolve outstanding penalties. The roll happens first only because
+       Rule 13's doubles test needs it; a jailed player who stays in has
+       simply spent their turn on the attempt. */
+    if (!resolve_jail(g, p, d1, d2)) {
+        return;
+    }
 
     move_player(g, p, total);                       /* 3. move clockwise  */
     land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
