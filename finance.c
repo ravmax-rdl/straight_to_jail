@@ -170,7 +170,20 @@ void pay_community_fund(GameState *g, int p)
  */
 int net_worth(const GameState *g, int p)
 {
-    return g->players[p].cash;
+    int i, total = g->players[p].cash;
+
+    /* Every held square at market value -- properties, railways and
+       utilities alike. Rule 15 lists them separately but sums them, and
+       square_value already knows how to price each type. Buildings are not
+       here yet; they arrive with construction in milestone 3, at book
+       value, and the loan is subtracted there too. */
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p) {
+            total += square_value(g, i);
+        }
+    }
+
+    return total;
 }
 
 /* R5.3: render an amount with thousands separators, no currency prefix --

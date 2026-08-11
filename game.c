@@ -183,18 +183,10 @@ static void rule_line(char c, int n)
     putchar('\n');
 }
 
-/* Counted directly off the board rather than cached on the Player, so the
-   figure cannot drift from reality after a foreclosure or an auction. */
-static int count_properties(const GameState *g, int p)
-{
-    int i, n = 0;
-    for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].type == SQ_PROPERTY && g->board[i].owner == p) {
-            n++;
-        }
-    }
-    return n;
-}
+/* Property and hotel counts are read straight off the board rather than
+   cached on the Player, so the figures cannot drift from reality after a
+   foreclosure or an auction. count_owned lives in board.c and does the
+   property half; only hotels need a local helper. */
 
 static int count_hotels(const GameState *g, int p)
 {
@@ -239,7 +231,7 @@ void round_summary(const GameState *g)
         printf("%s\n", pl->name);
         printf("Cash : LKR %s\n", fmt_lkr(b, pl->cash));
         printf("Net Worth : LKR %s\n", fmt_lkr(b, net_worth(g, p)));
-        printf("Properties : %d\n", count_properties(g, p));
+        printf("Properties : %d\n", count_owned(g, p, SQ_PROPERTY));
         printf("Hotels : %d\n", count_hotels(g, p));
 
         /* "None", never "LKR 0" -- the template is explicit about this and
@@ -347,11 +339,61 @@ void final_report(const GameState *g)
  * silently and do nothing, which is the failure this switch exists to
  * prevent.
  */
+/* Rules 5 and 7: an unowned purchasable square is bought or auctioned; an
+ * owned one charges rent unless its owner is standing on it.
+ *
+ * Rule 5 gives no third option. Declining is not "nothing happens" -- it is
+ * an auction, immediately, which is why the else branch is not empty.
+ */
+static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
+{
+    char    b[FMT_BUF];
+    Square *s = &g->board[sq];
+    int     rent;
+
+    if (s->owner < 0) {
+        int price = square_value(g, sq);
+
+        if (decide_buy(g, p, sq) && charge(g, p, price, -1)) {
+            s->owner          = p;
+            s->purchasedRound = g->round;    /* D19: age starts at purchase */
+            printf("%s purchased %s for LKR %s.\n", g->players[p].name, s->name,
+                   fmt_lkr(b, price));
+            printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+        }
+        /* Rule 5 gives no third option: a declined square goes straight to
+           auction. That is the next step; until it lands, the square simply
+           stays with the Bank and can be offered again on a later landing. */
+        return;
+    }
+
+    if (s->owner == p) {
+        return;                              /* your own square is free   */
+    }
+
+    rent = square_rent(g, sq, diceTotal);
+    if (rent <= 0) {
+        return;                              /* mortgaged -- Rule 7       */
+    }
+
+    printf("%s landed on %s.\n", g->players[p].name, s->name);
+    if (charge(g, p, rent, s->owner)) {
+        printf("Rent Paid : LKR %s.\n", fmt_lkr(b, rent));
+        printf("Owner : %s.\n", g->players[s->owner].name);
+    } else {
+        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, rent));
+    }
+}
+
 void land_on(GameState *g, int p, int sq, int diceTotal)
 {
-    (void)diceTotal;    /* utilities need it from milestone 2.2 onward */
-
     switch (g->board[sq].type) {
+    case SQ_PROPERTY:
+    case SQ_RAILWAY:
+    case SQ_UTILITY:
+        land_on_purchasable(g, p, sq, diceTotal);
+        break;
+
     case SQ_TAX:
         pay_income_tax(g, p);
         break;
@@ -368,9 +410,6 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         break;
 
     /* Still to come, each in its own step. */
-    case SQ_PROPERTY:
-    case SQ_RAILWAY:
-    case SQ_UTILITY:
     case SQ_BANK:
     case SQ_INSURANCE:
     case SQ_EVENT:

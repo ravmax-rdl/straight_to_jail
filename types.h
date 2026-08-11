@@ -341,6 +341,13 @@ int square_rent(const GameState *g, int sq, int diceTotal);
    the signature is final. */
 int effect_modifier(const GameState *g, EffectKind kind, int square, int player);
 
+/* players.c -- the decision engines. Placeholder bodies until milestone 6;
+   the signatures are final, so that milestone touches players.c and no other
+   file. decide_bid returns the amount to bid or 0 to withdraw permanently;
+   minBid is the smallest legal bid right now. */
+bool decide_buy(GameState *g, int p, int sq);
+int  decide_bid(GameState *g, int p, int sq, int minBid);
+
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);
 void determine_order(GameState *g);
