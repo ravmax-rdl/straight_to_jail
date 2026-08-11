@@ -309,6 +309,11 @@ bool charge(GameState *g, int p, int amt, int toPlayer);
 /* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
    assets), so deliberately two functions rather than one parameterised. */
 int  total_assets(const GameState *g, int p);
+
+/* finance.c -- auctions (LK 19-23, D23). anchorPlayer is whoever's turn
+   triggered it; bidding starts with the player after them. */
+int  auction_opening(const GameState *g, int sq);
+void run_auction(GameState *g, int sq, int anchorPlayer);
 void pay_income_tax(GameState *g, int p);
 void pay_community_fund(GameState *g, int p);
 

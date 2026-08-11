@@ -360,10 +360,11 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
             printf("%s purchased %s for LKR %s.\n", g->players[p].name, s->name,
                    fmt_lkr(b, price));
             printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+        } else {
+            /* Rule 5 gives no third option: a declined square goes straight
+               to auction, and LK 19 lets the decliner bid in it. */
+            run_auction(g, sq, p);
         }
-        /* Rule 5 gives no third option: a declined square goes straight to
-           auction. That is the next step; until it lands, the square simply
-           stays with the Bank and can be offered again on a later landing. */
         return;
     }
 
