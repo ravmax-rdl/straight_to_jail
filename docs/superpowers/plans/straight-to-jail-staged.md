@@ -55,7 +55,10 @@ Every milestone's requirements implicitly include all of these.
 - **The binary is `monopoly`.** Spec §4 mandates that exact build line.
 - **The first line of output is `MONOPOLY-LK Simulation`** (**R5.7**). The ASCII art currently in `main.c` must go.
 - **Module split per Table 5.** All shared types, constants and **all** public prototypes live in `types.h`.
-- **No global variables. No `malloc`. No linked lists. No `math.h`.**
+- **No global variables. No `malloc`/`calloc`/`realloc`. No linked lists. No `math.h`. No `getline`.** This holds in
+  the `Rent.csv` reader too — fixed stack buffers, straight into `g->board`.
+- **Per-property price and base rent come from `assets/Rent.csv` at runtime** (**R0.10**, **D7′**, **D27**). No source
+  file contains a transcribed copy. A missing or malformed file is fatal: stderr diagnostic, exit 1, nothing on stdout.
 - **Money is stored `int`.** Percentages go through `apply_pct` / `pct_of`, which are the only functions containing a
   `double` (**D6′**).
 - **Every monetary figure printed goes through `fmt_lkr`.**
@@ -81,7 +84,7 @@ Every milestone's requirements implicitly include all of these.
 | `types.h` | Enums, constants, structs, **every** public prototype, the D-decision header block | M1 |
 | `main.c` | Seed handling, `GameState` on the stack, `game_init` + `game_run`. Nothing else | M1 |
 | `Makefile` | `monopoly` (canonical glob), `straight_to_jail` alias, `debug`, `clean` | M1 |
-| `board.c` | 40-square table, dice/RNG, movement, ownership queries, the four choke points | M1 |
+| `board.c` | 40-square table, the `Rent.csv` reader, dice/RNG, movement, ownership queries, the four choke points | M1 |
 | `game.c` | `game_run`, roll-off, round/turn loops, `land_on` dispatch, the scheduler, all block output | M1 |
 | `finance.c` | `fmt_lkr`, rounding helpers, `charge`/`credit`, tax, auctions, loans, insurance, net worth, bankruptcy | M1 |
 | `players.c` | The seven `decide_*` strategy functions | M2 |
@@ -223,8 +226,9 @@ int pct_of    (int value, int p) { return money_round(value * (p / 100.0));     
 
 ### 1.3 The board table
 
-- [x] **Step 12:** Add two file-local tables to `board.c`. The group table supplies **only** construction costs and
-      mortgage value (**D18**); its base price column is retained for reference and loan documentation.
+- [x] **Step 12:** Add the group table to `board.c`. It supplies **only** construction costs and mortgage value
+      (**D18**); its base price column is retained for reference and loan documentation. The *individual* price and
+      base rent are **not** transcribed here — they are read from `Rent.csv` at Step 12b (**R0.10**, **D7′**).
 
 ```c
 typedef struct { int basePrice, house, hotel, mortgage; } GroupValues;
@@ -240,24 +244,70 @@ static const GroupValues GROUP_VALUES[GRP_COUNT] = {  /* App B — D18 */
     /* DARKBLUE  */ { 10000, 3000, 12000, 5000 }
 };
 
-typedef struct { int sq, price, baseRent; } PropertyValues;
-
-static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
-    {  1,  1500,  100 }, {  3,  1800,  120 },
-    {  6,  2500,  180 }, {  8,  2700,  200 }, {  9,  3000,  220 },
-    { 11,  3500,  260 }, { 13,  3800,  280 }, { 14,  4000,  300 },
-    { 16,  4500,  350 }, { 18,  4700,  370 }, { 19,  5000,  400 },
-    { 21,  5500,  450 }, { 23,  5800,  480 }, { 24,  6000,  500 },
-    { 26,  6500,  600 }, { 27,  6800,  620 }, { 29,  7000,  650 },
-    { 31,  8000,  750 }, { 32,  8300,  780 }, { 34,  8500,  800 },
-    { 37, 10000, 1000 }, { 39, 12000, 1200 }
+/* The CSV's "Property Group" column, in PropertyGroup order, so a mistyped
+   group in the file is caught rather than ignored. */
+static const char *GROUP_NAMES[GRP_COUNT] = {
+    "Brown", "Light Blue", "Pink", "Orange",
+    "Red", "Yellow", "Green", "Dark Blue"
 };
 ```
 
-- [x] **Step 13:** Write `board_init` filling all 40 squares from the R1.1 table. Properties take `price` and `baseRent`
-      from `PROPERTY_VALUES` and `mortgageValue`/`houseCost`/`hotelCost` from `GROUP_VALUES[group]`. Railways and
-      utilities take `price = STATION_PRICE`, `mortgageValue = STATION_MORTGAGE`. Every square gets `owner = -1`,
-      `purchasedRound = -1`, `conditionPct = 100`, `policy = INS_NONE`, everything else zero.
+- [x] **Step 12b:** Write the `Rent.csv` reader in `board.c` — plain `fopen`/`fgets`/`fclose`, fixed stack buffers,
+      no allocation of any kind (**R0.5**). This is the one place in the program a reader might expect `malloc`;
+      it is absent because the row count is known and `g->board` already exists. `getline` is excluded for
+      allocating and for not being C99.
+
+```c
+#define CSV_LINE_MAX  256   /* longest real line is ~45 bytes            */
+#define CSV_FIELDS      4   /* Group, Property, Price, Base Rent         */
+
+static const char *CSV_CANDIDATES[] = {                /* D27 search order */
+    "assets/Rent.csv", "Rent.csv", "../assets/Rent.csv"
+};
+```
+
+  Helpers, each doing one thing: `chomp` (strip `\n` and `\r` — the file is CRLF while
+  `.gitattributes` normalises to LF, so both must work), `trim` (surrounding blanks; interior
+  spaces survive, because `"Light Blue"` is one field), `parse_int` (**`strtol`, not `atoi`** —
+  `atoi` cannot tell `"0"` from `"not a number"`, which would turn a corrupt cell into a free
+  property), `group_from_name`, and `property_square_named`.
+
+  **Join on the property name, never on row order.** The CSV is grouped by colour and the board is
+  in board order; pairing them positionally would break silently the first time either is reordered.
+
+- [x] **Step 12c:** Validate every row and the file as a whole. A partially-loaded board is worse than none — the
+      first player to land on a gap buys a property for nothing.
+
+| Check | Message |
+|-------|---------|
+| exactly 4 fields | `expected 4 fields, found 3` |
+| name is a property on the board | `"Atlantis" is not a property on the board` |
+| group agrees with the board | `Pettah is group "Green" here but Brown on the board` |
+| price and base rent are positive integers | `price "abc" and base rent "100" must both be positive integers` |
+| no property appears twice | `duplicate row for Pettah` |
+| all 22 present at EOF | `no row for "Pettah" (square 1)` |
+
+  Every message carries the file and line number. Count fields with a loop rather than four
+  `strtok` calls — `strtok` folds adjacent commas into one delimiter, so a short row would parse
+  as valid; the count check is what turns that into a reported error.
+
+- [x] **Step 13:** Write `board_init` filling all 40 squares from the R1.1 table, then overlaying the CSV:
+
+```c
+bool board_init(GameState *g, const char *csvPath);   /* false = could not load */
+```
+
+  Pass 1 (compiled in): properties take `mortgageValue`/`houseCost`/`hotelCost` from
+  `GROUP_VALUES[group]`; railways and utilities take `price = STATION_PRICE`,
+  `mortgageValue = STATION_MORTGAGE`; every square gets `owner = -1`, `purchasedRound = -1`,
+  `conditionPct = 100`, `policy = INS_NONE`, everything else zero.
+  Pass 2 (from file): `price` and `baseRent` on the 22 property squares.
+
+  `csvPath` is `argv[2]` when given and `NULL` otherwise, in which case the candidate list is
+  searched. An explicitly named path is never second-guessed. `game_init` becomes
+  `bool game_init(GameState *g, const char *csvPath)` and propagates the failure; `main` calls it
+  **before** printing the banner and returns 1 on failure, so a failed load writes its diagnostic
+  to stderr and **zero bytes to stdout** (**R5.7**, **D27**).
 - [x] **Step 14:** Apply the **D14** region bitmasks:
 
 | Squares | Tags |
@@ -275,7 +325,8 @@ static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
 | 5, 15, 25, 35 railways | `COMMERCIAL` |
 
 - [x] **Step 15:** Temporary dump block in `main` printing `index | type | name | group | price | baseRent | mortgage |
-      regions` for all 40 squares. Check line-by-line against R1.1 and R1.3.
+      regions` for all 40 squares. Check line-by-line against R1.1 and R1.3. (`board.c` has no `main` of its own, so
+      the alternative is a throwaway harness compiled outside the tree: `gcc board.c finance.c dump.c -o dump`.)
 - [x] **Step 16:** Confirm the totals: 22 properties, 4 railways, 2 utilities, 1 bank, 2 insurance, 1 tax, 1 community,
       3 event, 4 special = 40. Group counts: Brown 2, Light Blue 3, Pink 3, Orange 3, Red 3, Yellow 3, Green 3,
       Dark Blue 2 = 22. Then delete the dump.
@@ -283,10 +334,19 @@ static const PropertyValues PROPERTY_VALUES[22] = {   /* Rent.csv — D7' */
 > A group with the wrong member count silently breaks monopoly detection in milestone 3 and is very hard to find
 > later. Check it now.
 
+- [x] **Step 16b:** Exercise the CSV failure paths, each against a copy of `Rent.csv` mutated in the scratch
+      directory — never edit the real file. Every one must exit 1 with a line-numbered stderr message:
+      short row, non-numeric price, zero price, unknown property name, wrong group, missing row, duplicate row.
+      Then confirm the two that must succeed: an LF-only copy (`tr -d '\r'`) and an explicit `argv[2]` path.
+- [x] **Step 16c:** Confirm the file is genuinely the source of truth — change a price in a scratch copy, run with
+      that path, and see the new number without recompiling. Then run from a directory where no candidate resolves
+      and confirm `exit=1` with **zero bytes on stdout**: `./monopoly 42 2>/dev/null | wc -c` → `0`.
+
 ### 1.4 Roll-off, loops, movement
 
-- [x] **Step 17:** `game_init` — zero the `GameState`, call `board_init`, set the four players' names and strategies in
-      Player 1–4 order, `cash = START_CASH`, `pos = 0`, `econ.interestRatePct = BASE_INTEREST_PCT`,
+- [x] **Step 17:** `game_init` — zero the `GameState`, call `board_init` and **return `false` immediately if it
+      fails** (**D27**), then set the four players' names and strategies in Player 1–4 order,
+      `cash = START_CASH`, `pos = 0`, `econ.interestRatePct = BASE_INTEREST_PCT`,
       `econ.incomeTaxPct = INCOME_TAX_PCT` (**D2′**), `econ.activeRegulation = -1`, `round = 0`.
 - [x] **Step 18:** `determine_order` per Rule 2 and **D8′**. Every player rolls two dice; rank descending. **Only tied
       players reroll, and the reroll permutes only their own positions** — untied ranks never move. Repeat while ties
@@ -1032,9 +1092,11 @@ exercises milestone 3's failure paths; if it never defaults in five seeds, `deci
 - [ ] **Step 14:** Determinism: `./monopoly 42 > a.txt && ./monopoly 42 > b.txt && diff a.txt b.txt` — no output.
 - [ ] **Step 15:** No interaction: `./monopoly 42 < /dev/null` completes normally.
 - [ ] **Step 16:** `make debug` across all five seeds — no invariant assertion fires.
-- [ ] **Step 17:** Constraint sweep — `grep -rn "malloc\|calloc\|realloc\|math\.h" *.c *.h` returns nothing;
-      `grep -n "double" *.c` returns only the three helpers in `finance.c`; no file-scope variable outside `const`
-      tables.
+- [ ] **Step 17:** Constraint sweep — `grep -rn "malloc\|calloc\|realloc\|getline\|math\.h" *.c *.h` returns nothing
+      but the comments explaining their absence; `grep -n "double" *.c` returns only the three helpers in
+      `finance.c`; no file-scope variable outside `const` tables. Then the CSV contract: no source file contains a
+      transcribed price table, editing `Rent.csv` changes the next run without recompiling, and running where no
+      candidate resolves gives `exit=1` with `./monopoly 42 2>/dev/null | wc -c` → `0`.
 - [ ] **Step 18:** Tick every checkbox in `docs/REQUIREMENTS.md` that now passes. Update `README.md` with build and run
       instructions.
 

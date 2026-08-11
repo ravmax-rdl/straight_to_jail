@@ -18,11 +18,12 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R0.2** `gcc *.c -o monopoly` compiles with **zero errors and zero warnings** (§4). A `Makefile` may exist for convenience but must never be required.
 - [ ] **R0.3** At minimum these source files, split exactly by this responsibility (Table 5): `types.h`, `board.c`, `players.c`, `finance.c`, `events.c`, `game.c`, `main.c`.
 - [ ] **R0.4** No global variables. A single `GameState` struct on `main`'s stack, passed explicitly.
-- [ ] **R0.5** **No dynamic memory and no linked lists.** Every collection is a fixed-size array indexed by `int`. No `malloc`, no `free`, no self-referential node structs. Nothing in the spec needs them — all sizes are known at compile time (40 squares, 4 players, 22 properties, 20 cards, 8 groups).
+- [ ] **R0.5** **No dynamic memory and no linked lists, anywhere, including the CSV reader.** Every collection is a fixed-size array indexed by `int`. No `malloc`, no `calloc`, no `realloc`, no `free`, no self-referential node structs, and no POSIX `getline` (it allocates, and is not C99). Nothing in the spec needs them — all sizes are known at compile time (40 squares, 4 players, 22 properties, 20 cards, 8 groups), and the CSV is read line-by-line into a fixed stack buffer straight into `g->board`.
 - [ ] **R0.6** All *stored* money is `int`. Ratio and interest arithmetic is computed in `double` and rounded to the nearest `int` at the boundary, through one helper (decision **D6′**).
 - [ ] **R0.7** All randomness via `srand`/`rand`. Seed = `argv[1]` if given, else `time(NULL)`, so development runs are reproducible.
 - [ ] **R0.8** Zero user interaction after launch (§4). No `scanf`, no `getchar`.
 - [ ] **R0.9** No `math.h`. `round()` risks needing `-lm`, which the mandated `gcc *.c -o monopoly` line does not supply. Rounding is arithmetic (see **D6′**).
+- [ ] **R0.10** **Per-property rent data is read from `assets/Rent.csv` at runtime using file handling** — `fopen`/`fgets`/`fclose` over fixed stack buffers. The values are data, not code: no transcribed copy of the CSV exists in any source file. Location and failure policy are decision **D27**.
 
 ## R1 — Board & entities
 
@@ -43,7 +44,7 @@ such override is a numbered decision so it can be defended at the viva.
 
 - [ ] **R1.2** Square 2 is a **Community Development Fund** square, not a National Event Card square (decision **D17**). Table 1 types it "Event", but it draws no card — it levies a tax. There are therefore exactly **three** card squares: 7, 22, 36.
 
-- [ ] **R1.3** 22 properties with **individual** purchase prices and base rents (`Rent.csv`, decision **D7′**):
+- [ ] **R1.3** 22 properties with **individual** purchase prices and base rents, **read at runtime from `assets/Rent.csv`** (**R0.10**, decisions **D7′** and **D27**). The table below records what the file contains as of the current revision; it is documentation, not a specification of compiled-in constants, and the program must reproduce whatever the file says rather than these figures:
 
 | Group | Property | Sq | Price | Base rent |
 |-------|----------|----|-------|-----------|
@@ -190,7 +191,7 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 |----|-----|-----|
 | ~~**D2**~~ | Income Tax = LKR 1,000 base | **D2′** Income Tax = **15% of the player's current cash**. The rate lives in `econ.incomeTaxPct`, seeded at 15, moved multiplicatively by each inflation draw exactly as the loan rate is (**D21**), and scaled again at charge time by `EFF_TAX_MUL` — ×1.5 under *Increase Property Tax* |
 | ~~**D6**~~ | All percentage math in `int`, truncating | **D6′** Money is **stored** as `int`. Ratio, interest and percentage arithmetic is computed in `double` and rounded to nearest at the boundary by one helper, `int money_round(double)`. No `math.h` (**R0.9**): rounding is `(int)(v + (v >= 0 ? 0.5 : -0.5))` |
-| ~~**D7**~~ | Base rent = 10% of group purchase price | **D7′** Individual purchase price and individual base rent come from `Rent.csv` (**R1.3**), hard-coded as a static table. The group figures are construction costs and mortgage value only |
+| ~~**D7**~~ | Base rent = 10% of group purchase price | **D7′** Individual purchase price and individual base rent come from `Rent.csv` (**R1.3**), **read from the file at startup** (**D27**) rather than transcribed into a static table. The group figures are construction costs and mortgage value only |
 
 ### Active decisions
 
@@ -219,6 +220,7 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 | **D24** | Luxury Property Tax "annual" cadence | Charged **once when the regulation activates**, at 25% of each hotel-bearing property's value including its buildings. Regulations run about 20 rounds, so once per activation is the closest available reading of "annual". Unlike D4, LK 24 supplies no per-round cadence to override this |
 | **D25** | Anti-Speculation Act's second clause | Enforcing "at most three undeveloped properties" strictly makes "additional purchases require development within five rounds" unreachable — the additional purchase can never occur. Implemented as the cap alone, with the reasoning in a comment |
 | **D26** | §5 blank lines | Blocks are emitted **compact**. Settled by extraction, not inference: `pdftotext -layout` over §5 renders the entire `Round N Summary` block — 30 lines, all four players — with **no blank line between any field**, and gives the rule widths as exactly 45 (`=` and `-`) and 41 for the market block. The market block is the one with real internal blanks: one after the header rule, one between each labelled section, none within a section. Its underlines are literal, not derived — 13, 16, 23, 12, 23 against labels of 11, 14, 20, 9, 21. **Known contradiction:** the `GAME OVER` block straddles a page break, and its first half (through `Total Property Value`) extracts tight while its second half extracts blank-separated. The document is inconsistent with itself there. We follow the tight half, matching the round summary and the unbroken run; flagged for the M6 audit as the single block where §5 cannot arbitrate |
+| **D27** | Where `Rent.csv` lives and what happens when it does not | **Searched, then fatal.** `board_init` tries `assets/Rent.csv`, then `Rent.csv`, then `../assets/Rent.csv`, so the program runs whether it is launched from the repository root or from the source directory. `argv[2]` overrides the search with an explicit path, and an explicit path is never second-guessed — failing to open the file the caller named is the error worth reporting. If nothing opens, or the data is malformed, `main` prints a diagnostic **to stderr** and returns 1 **before any stdout output**, so a failed run never emits a partial pre-game block and never pollutes the graded stdout stream (**R5.7**). There is deliberately **no fallback table**: a compiled-in copy would be a second source of truth, free to drift silently out of step with the file. Validation is total — every row must have 4 fields, a property name that exists on the board, a group matching the board's, a strictly positive integer price and base rent, and no duplicates; and all 22 property squares must be covered when the file closes. Both LF and CRLF line endings are accepted, since `.gitattributes` normalises on checkout while the supplied file is CRLF |
 
 ---
 
@@ -229,5 +231,9 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 - [ ] A full 500-round game completes; a game with early bankruptcies ends correctly with the winner block.
 - [ ] `./monopoly 42` twice produces byte-identical output.
 - [ ] Console output audited line-by-line against every §5 template.
-- [ ] No `malloc`, no linked lists, no globals, no `math.h` anywhere in the tree.
+- [ ] No `malloc`, `calloc`, `realloc`, `getline`, linked lists, globals, or `math.h` anywhere in the tree.
+- [ ] Every per-property price and base rent in a run traces to a row of `assets/Rent.csv`; no source file contains a transcribed copy.
+- [ ] Editing a price in `Rent.csv` changes the next run without recompiling.
+- [ ] Running from a directory where the CSV cannot be found exits 1 with a stderr diagnostic and **zero bytes on stdout**.
+- [ ] A short, duplicated, misnamed, mis-grouped, or non-numeric CSV row is reported with its line number rather than silently accepted.
 - [ ] All R-items above checked; every D-decision implemented exactly once and cited in a comment.

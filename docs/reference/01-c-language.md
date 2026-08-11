@@ -355,6 +355,176 @@ What you get for free by not allocating:
 `malloc` earns its keep when a size is genuinely unknown until runtime. Reaching for it when the
 size is written in the spec adds failure modes and removes nothing.
 
+### "But I have to read a file"
+
+This is the moment the rule usually gets abandoned, so it is worth being explicit: **reading
+`Rent.csv` needs no allocation either.**
+
+The instinct is that file input is unbounded, so a buffer must grow to fit it. It is not unbounded
+here. You know the file has 22 data rows. You know the longest line — `Dark Blue,Nuwara
+Eliya,10000,1000` — is about 45 bytes. And you know where the values are going, because
+`g->board` already exists and is already the right size.
+
+So the whole reader is one fixed buffer read one line at a time:
+
+```c
+char line[CSV_LINE_MAX];                    /* 256 — four times the longest real line */
+
+while (fgets(line, (int)sizeof line, f) != NULL) {
+    /* parse this line into g->board, then reuse the buffer */
+}
+```
+
+The buffer is reused for every line, so the memory cost is 256 bytes regardless of file length.
+
+You may see `getline()` recommended for this. Avoid it twice over: it `malloc`s the buffer for
+you (which is exactly what R0.5 forbids), and it is POSIX rather than C99, so `-pedantic` will
+reject it. `fgets` is the portable, non-allocating answer.
+
+---
+
+# Reading a file
+
+This project reads exactly one file — `assets/Rent.csv`, holding the 22 individual purchase prices
+and base rents (**R0.10**, **D7′**). The values are *data*, not code: nothing in any `.c` file
+duplicates them, so editing the CSV changes the next run without recompiling. That is the whole
+point of doing it this way rather than typing the numbers into a table.
+
+## The three calls
+
+```c
+FILE *f = fopen(path, "r");     /* open  — returns NULL on failure   */
+fgets(line, sizeof line, f);    /* read  — returns NULL at EOF/error */
+fclose(f);                      /* close — always, on every path     */
+```
+
+`"r"` is text mode. On Windows that translates CRLF to LF on the way in; on Linux it does nothing.
+You cannot rely on either, which is why the reader strips terminators itself (below).
+
+**`fopen` returning `NULL` is not an edge case — it is the normal outcome of running the program
+from the wrong directory.** Check it every time. The compiler will not remind you.
+
+## Reading line by line
+
+```c
+while (fgets(line, (int)sizeof line, f) != NULL) {
+    ...
+}
+```
+
+`fgets` reads at most `size - 1` characters, stops at a newline, and always terminates the string.
+It **keeps** the newline if the line fitted. Three consequences worth knowing:
+
+1. You must strip the terminator yourself.
+2. If a line is longer than the buffer, you get the first chunk and the rest arrives as the next
+   iteration — a silent corruption. Size the buffer with real headroom.
+3. `fgets` returns `NULL` for both EOF and a read error, which are different things. Distinguish
+   them with `ferror(f)` after the loop.
+
+## Stripping the line ending
+
+Three conventions exist and this project meets two of them: the supplied `Rent.csv` is CRLF, while
+`.gitattributes` normalises to LF on checkout. So the reader cannot assume:
+
+```c
+static void chomp(char *s)
+{
+    size_t n = strlen(s);
+
+    while (n > 0 && (s[n - 1] == '\n' || s[n - 1] == '\r')) {
+        s[--n] = '\0';
+    }
+}
+```
+
+The loop rather than a single check is what handles `\r\n` — strip the `\n`, then the `\r`.
+
+Skipping this is a genuinely nasty bug. A trailing `\r` on the last field makes `strcmp(name,
+"Pettah")` fail while the two strings look identical in every debugger and every `printf`.
+
+## Splitting on commas with `strtok`
+
+```c
+for (tok = strtok(line, ","); tok != NULL; tok = strtok(NULL, ",")) {
+    if (n < CSV_FIELDS) {
+        field[n] = trim(tok);
+    }
+    n++;
+}
+```
+
+The first call takes the string; every later call takes `NULL`, meaning *continue where you left
+off*. `strtok` works by writing `'\0'` over each delimiter and returning pointers into the original
+buffer — so it **modifies `line` in place** and returns no copies. That is fine here (the buffer is
+ours and we are done with it each iteration) but it means you can never `strtok` a string literal.
+
+**The caveat that matters:** `strtok` treats a run of delimiters as one. Given `Brown,,1500,100` it
+returns **three** tokens, not four, and quietly shifts your fields left by one. A short row would
+parse as a valid row with the wrong numbers in the wrong columns.
+
+The defence is to count *every* token and check the total, which is why the loop above increments
+`n` past `CSV_FIELDS` rather than stopping at four:
+
+```c
+if (n != CSV_FIELDS) {
+    fprintf(stderr, "%s:%d: expected %d fields, found %d\n", path, lineNo, CSV_FIELDS, n);
+    fclose(f);
+    return false;
+}
+```
+
+## `strtol`, never `atoi`
+
+```c
+static bool parse_int(const char *s, int *out)
+{
+    char *end;
+    long  v;
+
+    if (*s == '\0') return false;
+    v = strtol(s, &end, 10);
+    if (*end != '\0' || v <= 0 || v > INT_MAX) return false;   /* trailing junk, or out of range */
+    *out = (int)v;
+    return true;
+}
+```
+
+`atoi("abc")` returns `0`. So does `atoi("0")`. It has no way to tell you which happened, and in
+this program that difference is a property with a price of zero — free to the first player who
+lands on it.
+
+`strtol` sets `end` to the first character it could not convert. If `*end` is not `'\0'`, the field
+had trailing junk and is not a number. That check is the entire difference between detecting a
+corrupt file and playing a broken game.
+
+## Errors go to `stderr`, not `stdout`
+
+```c
+fprintf(stderr, "straight_to_jail: cannot open Rent.csv\n");
+```
+
+`stdout` carries the graded §5 output, whose first line must be `MONOPOLY-LK Simulation` (**R5.7**).
+Diagnostics must never appear there. `stderr` is a separate stream for exactly this, and it is
+unbuffered, so the message survives even if the program then exits.
+
+This is also why `main` loads the CSV *before* printing the banner: a failed run then produces a
+clear error on stderr and **zero bytes** on stdout, rather than half a pre-game block followed by a
+complaint.
+
+## Validate before you trust
+
+A file that opened and parsed can still be wrong. This reader checks, per row, that there are four
+fields, that the property name exists on the board, that the group agrees with the board, that price
+and base rent are positive integers, and that no property appears twice — then, at EOF, that all 22
+properties were covered.
+
+That last one catches the failure the per-row checks cannot: a file that is simply missing a line.
+Every row in it is valid; the *file* is not.
+
+The principle generalises well beyond C. **Data from outside your program is untrusted input, even
+when you wrote it yourself.** The cost of checking is a dozen lines; the cost of not checking is a
+simulation that runs to completion and reports numbers that are quietly wrong.
+
 ---
 
 # Pointers and passing state
@@ -708,7 +878,11 @@ Before committing any stage:
 - [ ] Every file-local helper is `static`
 - [ ] Every query function takes `const GameState *`
 - [ ] Every struct loop uses a pointer, not a copy
-- [ ] Every percentage goes through `pct` or `pct_of`
+- [ ] Every percentage goes through `apply_pct` or `pct_of`
 - [ ] Every money print goes through `fmt_lkr`
 - [ ] `srand` is called exactly once
 - [ ] `./monopoly 42` twice produces identical output
+- [ ] No `malloc`, `calloc`, `realloc`, or `getline` — including in the CSV reader
+- [ ] Every `fopen` result is checked against `NULL`, and every path that opened a file closes it
+- [ ] Numeric fields parse with `strtol` and reject trailing junk — never `atoi`
+- [ ] Diagnostics go to `stderr`; `stdout` carries only the graded §5 output

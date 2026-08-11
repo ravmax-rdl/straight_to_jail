@@ -54,17 +54,22 @@ From spec §4 and the clarification set. These shape every decision below.
 3. **The Table 5 module split:** `types.h`, `board.c`, `players.c`, `finance.c`, `events.c`,
    `game.c`, `main.c`.
 4. **No global variables.** All state lives in one `GameState` on `main`'s stack, passed by pointer.
-5. **No dynamic memory and no linked lists.** Every collection is a fixed-size array indexed by
-   `int`. Nothing here needs otherwise: 40 squares, 4 players, 22 properties, 20 cards, 8 groups are
-   all compile-time constants. Where the spec says "queue" (App A's deck), an array plus a head index
-   is the whole implementation.
-6. **Money is stored as `int`; ratio arithmetic is `double`, rounded at the boundary.** This is
+5. **No dynamic memory and no linked lists — anywhere, including the CSV reader.** Every collection
+   is a fixed-size array indexed by `int`. Nothing here needs otherwise: 40 squares, 4 players,
+   22 properties, 20 cards, 8 groups are all compile-time constants. Where the spec says "queue"
+   (App A's deck), an array plus a head index is the whole implementation. Reading `Rent.csv` is the
+   one place a reader might expect `malloc`; it uses a fixed stack buffer and writes straight into
+   `g->board`, and POSIX `getline` is excluded for allocating (and for not being C99).
+6. **Per-property values are read from `assets/Rent.csv` at runtime** with `fopen`/`fgets`/`fclose`
+   (**R0.10**, **D27**). No transcribed copy of the file exists in any source file.
+7. **Money is stored as `int`; ratio arithmetic is `double`, rounded at the boundary.** This is
    decision **D6′**, and it reverses the earlier integer-truncation rule. Interest, percentages,
    premiums and tax all compute in `double` and pass through one rounding helper on the way back to
    `int`. No `double` is ever *stored* as a balance.
-7. **No `math.h`.** `round()` may require `-lm`, and the mandated build line does not supply it.
+8. **No `math.h`.** `round()` may require `-lm`, and the mandated build line does not supply it.
    Rounding is arithmetic: `(int)(v + (v >= 0 ? 0.5 : -0.5))`.
-8. **Zero user interaction** after launch.
+9. **Zero user interaction** after launch. Reading a data file is not interaction — nothing is read
+   from stdin, and the run is still fully autonomous.
 
 ---
 
@@ -190,6 +195,51 @@ that works, and simplicity is the graded quality here.
 Why `purchasedRound` rather than an `age` counter: **D19**. Age exists only after purchase, so it is
 a derived value, and deriving it removes the possibility of the counter and the ownership flag
 disagreeing.
+
+### 4.1 Loading `Rent.csv`
+
+Two sources populate the 22 property squares, and **D18** keeps them apart because they answer
+different questions:
+
+| Source | Supplies | Form |
+|--------|----------|------|
+| Appendix B group table | house cost, hotel cost, mortgage value | compiled in, `static const` |
+| `assets/Rent.csv` | **individual** purchase price and base rent | **read at runtime** |
+
+The individual values are deliberately *not* compiled in (**R0.10**, **D7′**). The lecturer's file is
+the single source of truth; a transcribed copy would be a second one, free to drift out of step the
+first time either is edited. Editing a price in the CSV changes the next run without recompiling —
+which is the practical test of whether this is really file handling or just a table with extra steps.
+
+`board_init` therefore runs in two passes. The compiled-in layout and group-derived values go down
+first, then the CSV overlays `price` and `baseRent` onto the property squares:
+
+```c
+bool board_init(GameState *g, const char *csvPath);   /* false = could not load */
+```
+
+**The join is on the property name, not on row order.** The CSV is grouped by colour while the board
+is in board order, so pairing them positionally would be a silent hazard the first time either is
+reordered. Matching `LAYOUT[i].name` against the CSV's `Property` column means a name that does not
+match is an error the loader can name and report.
+
+**Everything is fixed-size.** One `char line[256]` on the stack — the longest real line is about 45
+bytes — and the destination array already exists. There is nothing to allocate, which is why R0.5
+survives contact with file I/O. `getline` would have allocated and is not C99 besides.
+
+**Validation is total**, because a partially-loaded board is worse than no board: the first player to
+land on a gap would buy a property for nothing. Every row must have exactly four fields, a property
+name on the board, a group agreeing with the board's, and a strictly positive integer price and base
+rent; no property may appear twice; and all 22 must be present when the file closes. `strtol` rather
+than `atoi` throughout, because `atoi` cannot distinguish `"0"` from `"not a number"`.
+
+**Failure is fatal and quiet on stdout** (**D27**). `main` calls `game_init` *before* printing the
+pre-game banner, so a failed load emits its diagnostic on stderr and returns 1 with zero bytes
+written to stdout — no partial §5 block, no pollution of the graded stream (**R5.7**). There is no
+fallback table, by design.
+
+**Both line endings are accepted.** The supplied file is CRLF while `.gitattributes` normalises to LF
+on checkout, so the reader strips whichever it finds rather than assuming.
 
 ---
 
@@ -433,5 +483,7 @@ The glob build forbids a second `main`, so there is no unit-test binary. What re
 - A full 500-round game completes; a game with early bankruptcies ends with the winner block.
 - `./monopoly 42` twice is byte-identical.
 - Every §5 template audited line-by-line against emitted output.
-- No `malloc`, no linked lists, no globals, no `math.h` in the tree.
+- No `malloc`, `calloc`, `realloc`, `getline`, linked lists, globals, or `math.h` in the tree.
+- Every price and base rent traces to a row of `Rent.csv`; editing the file changes the next run
+  without recompiling; a missing or malformed file exits 1 on stderr with nothing on stdout.
 - Every R-item in `REQUIREMENTS.md` checked; every D-decision implemented once and cited.
