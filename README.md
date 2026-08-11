@@ -76,36 +76,44 @@ gcc *.c -o monopoly
 ## Run
 
 ```bash
-./straight_to_jail        # make target
-./monopoly [seed]         # canonical binary; optional PRNG seed for reproducible runs
+./monopoly                       # random seed
+./monopoly 42                    # fixed seed — reproducible, byte for byte
+./monopoly 42 path/to/Rent.csv   # explicit data file
 ```
+
+Per-property purchase prices and base rents are **read from
+[`assets/Rent.csv`](assets/Rent.csv) at runtime**, not compiled in — edit a price there and the
+next run uses it, no rebuild needed.
+
+The file is looked for at `assets/Rent.csv`, then `Rent.csv`, then `../assets/Rent.csv`, so the
+program works from either the repository root or the source directory. Give a path as the second
+argument to override the search. If the file cannot be found or is malformed, the program prints
+a diagnostic to `stderr` and exits 1 without writing anything to `stdout`.
 
 ## Status
 
-🚧 **Planning phase** — no C source yet. Prep documents:
+🚧 **Milestone 1 complete** — board, movement, round and turn loops, round-end blocks. The
+economy, banking, and the four strategies are still to come.
 
 | Document | What it is |
 |----------|------------|
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the 15 spec-gap decisions (D1–D15) resolved before building |
-| [`docs/superpowers/specs/…-architecture-design.md`](docs/superpowers/specs/2026-07-28-straight-to-jail-architecture-design.md) | Architecture rationale — the effect registry, the three choke points, the round scheduler |
-| [`docs/superpowers/plans/…-staged.md`](docs/superpowers/plans/2026-07-28-straight-to-jail-staged.md) | **35-stage implementation plan** in 9 phases; every stage compiles clean and runs |
-| [`docs/learning/`](docs/learning/) | Three reference documents — the C, the data structures, the economic mathematics — built to PDF with pandoc + LaTeX |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D27** — including the three where the lecturer's clarifications override the PDF |
+| [`docs/superpowers/specs/straight-to-jail-architecture-design.md`](docs/superpowers/specs/straight-to-jail-architecture-design.md) | Architecture rationale — the `Rent.csv` loader, the effect registry, the choke points, the round scheduler |
+| [`docs/superpowers/plans/straight-to-jail-staged.md`](docs/superpowers/plans/straight-to-jail-staged.md) | The implementation plan — six milestones, every step compiling clean and running |
+| [`docs/reference/`](docs/reference/) | Three reference notes — the C, the data structures, the economic mathematics |
 
 ### Reference material
 
-The learning documents explain the concepts each stage assumes, using this project's own code
-and numbers:
+These explain the concepts each milestone assumes, using this project's own code and numbers:
 
-- [`01-c-language.md`](docs/learning/01-c-language.md) — multi-file compilation, enums, structs,
-  pointers, `const`-correctness, seeded randomness and modulo bias, and the five bugs this
-  project invites
-- [`02-program-design.md`](docs/learning/02-program-design.md) — modelling the board, the effect
-  registry, choke points, the round scheduler, state machines, circular queues, and verifying
-  without a test framework
-- [`03-economic-math.md`](docs/learning/03-economic-math.md) — integer money, truncation,
-  composing percentages, overflow headroom, compound interest, decay models, and expected value
-
-Build the PDFs with `docs/learning/build.ps1` (Windows) or `docs/learning/build.sh` (POSIX).
-Requires pandoc and a LaTeX engine — see [`docs/learning/README.md`](docs/learning/README.md).
+- [`01-c-language.md`](docs/reference/01-c-language.md) — multi-file compilation, enums, structs,
+  pointers, `const`-correctness, **reading a file without allocating**, seeded randomness and
+  modulo bias, and the bugs this project invites
+- [`02-program-design.md`](docs/reference/02-program-design.md) — modelling the board, loading
+  external data into fixed arrays, the effect registry, choke points, the round scheduler, state
+  machines, circular queues, and verifying without a test framework
+- [`03-economic-math.md`](docs/reference/03-economic-math.md) — money as `int`, rounding at the
+  boundary, composing percentages, overflow headroom, compound interest, decay models, and
+  expected value
 
 <a href="/LICENSE"><img height="24px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/LicenceMIT/licencemit1.svg"></a>

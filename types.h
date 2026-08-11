@@ -1,0 +1,326 @@
+#ifndef TYPES_H
+#define TYPES_H
+
+/* ------------------------------------------------------------------------
+ * Straight to Jail -- an implementation of the MONOPOLY-LK specification
+ * (SCS 1301 take-home). Spec: assets/Assignment_1_unlocked.pdf
+ * Supplemental per-property values: assets/Rent.csv
+ *
+ * SPEC-GAP DECISIONS. Full rationale in docs/REQUIREMENTS.md section D.
+ * Every one of these is implemented exactly once, at a choke point, and the
+ * implementation site carries a comment citing its ID.
+ *
+ * The three marked SUPERSEDES override the PDF; they come from the
+ * lecturer's clarification set, which is later and authoritative.
+ *
+ * D1  Repair cost     50% of the current construction cost of the buildings
+ *                     standing on the property                        [LK 10]
+ * D2' Income Tax      SUPERSEDES the PDF. 15% of the player's CURRENT CASH.
+ *                     The rate is held in econ.incomeTaxPct, seeded at 15,
+ *                     moved by inflation the way the loan rate is (D21),
+ *                     and further scaled at charge time by EFF_TAX_MUL --
+ *                     x1.5 under Increase Property Tax          [Rule 11]
+ * D3  Coverage        Basic {Fire,Flood} @80%; Comprehensive
+ *                     {Fire,Flood,Riot,Vandalism} @100%; Business
+ *                     Interruption all perils @100% + 5 rounds of hotel
+ *                     rent. Building Collapse and Electrical Failure are
+ *                     uncovered below Business Interruption. App E's
+ *                     "Earthquake" never occurs             [LK 10, App E]
+ * D4  Interest        The Table 9 rate applies EVERY ROUND; the "annual"
+ *                     label is ignored as inconsistent with LK 4. The
+ *                     issued rate is frozen for the loan's life  [LK 4, 13]
+ * D5  Max loan        75% of the mortgage value of properties + railways +
+ *                     utilities (LK 2 beats the narrower 1.1.4)      [LK 2]
+ * D6' Rounding        SUPERSEDES the PDF. Money is STORED as int; ratio
+ *                     and interest arithmetic is computed in double and
+ *                     rounded to nearest by money_round(). No math.h
+ * D7' Values          SUPERSEDES the PDF. Individual purchase price and
+ *                     base rent come from Rent.csv; the group table
+ *                     supplies construction cost and mortgage value
+ * D8' Tie-break       Only tied players reroll, and the reroll permutes
+ *                     only their own positions                      [Rule 2]
+ * D9  Valuation proxy "estimated market value" = square_value()    [sec. 3]
+ * D10 Jail            After the 3rd failed turn bail is auto-paid; doubles
+ *                     have no effect outside jail                  [Rule 13]
+ * D11 Debt recovery   sell buildings @50% -> mortgage free assets ->
+ *                     bankrupt, assets auctioned. Repaying a loan is NOT
+ *                     a rung: that needs the Bank square      [Rule 11, 14]
+ * D12 Effects         Permanent effects mutate stored values; temporary
+ *                     effects live in the registry and are read at
+ *                     access time                          [LK 14, 34, 35]
+ * D13 Round order     interest -> default -> condition -> insurance ->
+ *                     repairs -> cadences -> tick -> summary -> market
+ * D14 Region tags     see REGION_* below                   [LK 18, Table 4]
+ * D15 Claims recv.    always 0 -- compensation is credited immediately
+ *                                                              [Rule 15]
+ * D16 Total assets    the Community Development Fund's base, and its alone:
+ *                     sum of square_value over the 22 coloured properties
+ *                     owned. Buildings, railways and utilities excluded.
+ *                     The Fund levies 10% of it. Income Tax uses cash (D2'),
+ *                     so the two squares have genuinely different bases
+ * D17 Square 2        its own SQ_COMMUNITY type -- it draws no card. Card
+ *                     squares are 7, 22 and 36 only              [Table 1]
+ * D18 Value bases     individual price -> purchase, market value, rent
+ *                     basis, renovation, tax base, auction opening.
+ *                     group base price -> mortgage value only, i.e. loan
+ *                     capacity and debt-recovery proceeds
+ * D19 One clock       everything counts game rounds. A loan matures at
+ *                     issuedRound + 20; property age is
+ *                     round - purchasedRound and starts at purchase
+ * D20 Single claim    a payout consumes the policy, whatever rounds remain
+ * D21 Interest rate   seeds at Table 9 Stable 8%. Inflation applies LK 14
+ *                     multiplicatively. Large event shifts are relative
+ *                     (EFF_INTEREST_MUL); the explicit +/-2% adjustments
+ *                     are percentage points (EFF_INTEREST_ADD), since a
+ *                     relative 2% rounds to a no-op. ADD applies first
+ * D22 Loan pledge     only the minimum set of assets, highest mortgage
+ *                     value first, whose 75% LTV covers the amount
+ * D23 Auction order   starts with the player immediately after the current
+ *                     player, then clockwise. The decliner may bid
+ * D24 Luxury tax      charged once when the regulation activates, at 25%
+ *                     of each hotel property's value including buildings
+ * D25 Anti-Spec. Act  the <=3 undeveloped cap alone; enforcing it strictly
+ *                     makes LK 24's five-round clause unreachable
+ * D26 Output spacing  blocks are emitted compact. The gaps in the PDF are
+ *                     LaTeX spacing between verbatim chunks, not content
+ * ------------------------------------------------------------------------ */
+
+#include <stdbool.h>
+
+/* ---------------------------------------------------------------- enums -- */
+
+/* D17: SQ_COMMUNITY is distinct from SQ_EVENT. Table 1 types square 2 as
+   "Event", but it levies a tax rather than drawing a card, so the three card
+   squares are 7, 22 and 36 only. */
+typedef enum {
+    SQ_GO, SQ_PROPERTY, SQ_RAILWAY, SQ_UTILITY, SQ_BANK, SQ_INSURANCE,
+    SQ_TAX, SQ_COMMUNITY, SQ_EVENT, SQ_JAIL, SQ_PARKING, SQ_GOTOJAIL
+} SquareType;
+
+/* GRP_NONE is -1 so that colour groups index arrays directly from zero.
+   GRP_COUNT is the array-sizing sentinel. */
+typedef enum {
+    GRP_NONE = -1,
+    GRP_BROWN = 0, GRP_LIGHTBLUE, GRP_PINK, GRP_ORANGE,
+    GRP_RED, GRP_YELLOW, GRP_GREEN, GRP_DARKBLUE,
+    GRP_COUNT
+} PropertyGroup;
+
+typedef enum { INS_NONE, INS_BASIC, INS_COMPREHENSIVE, INS_BUSINESS } InsuranceType;
+
+typedef enum {
+    STRAT_AGGRESSIVE, STRAT_CONSERVATIVE, STRAT_RISKTAKER, STRAT_OPPORTUNIST
+} Strategy;
+
+typedef enum {
+    DIS_FIRE, DIS_FLOOD, DIS_RIOT, DIS_COLLAPSE, DIS_ELECTRICAL, DIS_COUNT
+} Disaster;
+
+/* Every timed economic modifier in the game reduces to one of these kinds.
+   D21: both interest kinds exist deliberately. Large event shifts are
+   relative (MUL); LK 24's and Appendix A's explicit +/-2% adjustments are
+   percentage points (ADD), because a relative 2% rounds to a no-op. ADD is
+   applied before MUL.
+   EFF_MAX_PROPERTIES reuses Effect.magnitudePct as a plain count, not a
+   percentage -- it carries the Anti-Speculation Act's cap of 3. */
+typedef enum {
+    EFF_VALUE_MUL, EFF_RENT_MUL, EFF_HOTEL_RENT_MUL, EFF_RAILWAY_RENT_MUL,
+    EFF_UTILITY_RENT_MUL, EFF_BUILD_COST_MUL, EFF_PREMIUM_MUL, EFF_MORTGAGE_MUL,
+    EFF_AUCTION_OPEN_MUL, EFF_INTEREST_MUL, EFF_INTEREST_ADD, EFF_TAX_MUL,
+    EFF_CLOSED, EFF_CONSTRUCTION_SUSPENDED, EFF_MAX_PROPERTIES,
+    EFF_FLOOD_RISK, EFF_RIOT_RISK,
+    EFF_KIND_COUNT
+} EffectKind;
+
+typedef enum {
+    SCOPE_GLOBAL, SCOPE_GROUP, SCOPE_REGION, SCOPE_SQUARE, SCOPE_PLAYER
+} EffectScope;
+
+/* D14 region tags. A bitmask rather than an enum because a square belongs to
+   several regions at once -- Trincomalee is northern, eastern and coastal. */
+#define REGION_WESTERN          0x01u
+#define REGION_CENTRAL          0x02u
+#define REGION_SOUTHERN_COASTAL 0x04u
+#define REGION_NORTHERN         0x08u
+#define REGION_EASTERN          0x10u
+#define REGION_COMMERCIAL       0x20u
+#define REGION_NWSDB_ADJACENT   0x40u
+#define REGION_COASTAL          0x80u
+
+/* ------------------------------------------------------------ constants -- */
+
+#define NUM_SQUARES         40
+#define NUM_PLAYERS          4
+#define NUM_PROPERTIES      22
+#define MAX_ROUNDS         500   /* Rule 15                                  */
+#define START_CASH       30000   /* Rule 1                                   */
+#define GO_SALARY         2000   /* Rule 4                                   */
+#define JAIL_BAIL          300   /* Rule 13                                  */
+#define JAIL_MAX_TURNS       3   /* Rule 13                                  */
+#define AUCTION_INC        250   /* LK 20                                    */
+#define AUCTION_OPEN_PCT    50   /* LK 19                                    */
+#define LOAN_LTV_PCT        75   /* LK 2, D5                                 */
+#define LOAN_ROUNDS         20   /* LK 4, D19                                */
+#define BASE_INTEREST_PCT    8   /* Table 9 Stable Economy, D21              */
+#define INS_ROUNDS          20   /* LK 9                                     */
+#define INS_WARN_ROUNDS      3   /* LK 9                                     */
+#define MAX_HOUSES           4   /* Rule 9                                   */
+#define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
+#define COMMUNITY_PCT       10   /* D16: of total property assets            */
+#define COND_DECAY_PCT       2   /* LK 25                                    */
+#define DEPREC_START_AGE    50   /* LK 16                                    */
+#define DEPREC_CAP_PCT      30   /* LK 16                                    */
+#define RENOVATE_PCT        10   /* LK 17                                    */
+#define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
+#define MARKET_COOLDOWN     30   /* LK 33                                    */
+#define DECK_SIZE           20   /* App A                                    */
+#define STATION_PRICE     1500   /* clarification: railways and utilities    */
+#define STATION_MORTGAGE   750   /* clarification: 50% of station price      */
+
+/* Worst case: 4 players holding several card effects each, plus the four
+   global cadenced systems, plus up to three square-scoped regional effects.
+   Sized with headroom; a DEBUG assert catches overflow rather than dropping
+   an effect silently. */
+#define MAX_EFFECTS        128
+
+/* Board indices that rules name directly. */
+#define SQ_IDX_GO            0
+#define SQ_IDX_JAIL         10
+#define SQ_IDX_BANK         38
+
+/* -------------------------------------------------------------- structs -- */
+
+/* One board square. The property fields sit idle on the 18 non-property
+   squares; a union would save under 1 KB and cost a discriminated-access
+   dance on every read, which is a bad trade when simplicity is the graded
+   quality. */
+typedef struct {
+    SquareType    type;
+    const char   *name;
+    PropertyGroup group;          /* GRP_NONE for non-properties             */
+    unsigned      regions;        /* REGION_* bitmask, D14                   */
+
+    /* Permanent-adjusted stored values. Only inflation mutates these (D12).
+       D18: price and baseRent are INDIVIDUAL, from Rent.csv. mortgageValue,
+       houseCost and hotelCost come from the group table in Appendix B. */
+    int price, baseRent, mortgageValue, houseCost, hotelCost;
+
+    int  owner;                   /* -1 = Bank                               */
+    int  purchasedRound;          /* -1 = unowned. D19: age is derived from
+                                     this, so it cannot disagree with owner. */
+    int  houses;                  /* 0..4, mutually exclusive with hotel     */
+    bool hotel;
+    bool mortgaged, loanLocked, damaged, structDamaged;
+
+    int  depreciationPct;         /* LK 16, capped at DEPREC_CAP_PCT         */
+    int  conditionPct;            /* LK 25, starts at 100                    */
+    int  unmaintainedRounds;      /* LK 28 counter                           */
+
+    InsuranceType policy;
+    int           policyRounds;
+} Square;
+
+typedef struct {
+    bool active;
+    int  principal;               /* grows every round at ratePct            */
+    int  ratePct;                 /* frozen at issue -- LK 13                */
+    int  issuedRound;             /* D19: matures at issuedRound + termRounds */
+    int  termRounds;              /* 20, extended by the LK 5 extend action  */
+} Loan;
+
+typedef struct {
+    const char *name;
+    Strategy    strat;
+    int  cash, pos, jailTurns, taxesDue;
+    bool bankrupt, jailed;
+    bool sufferedLoss;            /* gates the Risk Taker's insurance, 3.3   */
+    Loan loan;
+} Player;
+
+/* A single timed modifier. Every timed system in the game -- booms, declines,
+   regional cards, national events, event cards, regulations -- reduces to
+   pushing one of these. See the architecture document section 5 for why a
+   flat set of Economy fields cannot work: Appendix A cards are per-player and
+   overlapping, and LK 34 requires concurrent effects to stack rather than
+   overwrite. */
+typedef struct {
+    EffectKind kind;
+    int  scopeKind;               /* an EffectScope                          */
+    int  scope;                   /* group index, region mask, square, player */
+    int  magnitudePct;            /* signed: +25, -15                        */
+    int  owner;                   /* -1 = everyone                           */
+    int  roundsLeft;
+} Effect;
+
+typedef struct {
+    int  inflationPct;            /* most recent draw, for the LK 36 block   */
+    int  interestRatePct;         /* current rate for NEW loans only, D21    */
+    int  incomeTaxPct;            /* seeded at 15, inflation-adjusted, D2'   */
+    int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
+    int  lastBoomGroup, lastDeclineGroup;
+    int  activeRegulation;        /* -1 = none                               */
+    Effect effects[MAX_EFFECTS];
+    int    effectCount;
+} Economy;
+
+/* App A's "returned to the bottom of the deck" over a fixed array: nothing
+   moves, only the head index advances. No linked list, no allocation (R0.5). */
+typedef struct {
+    int cards[DECK_SIZE];
+    int head;
+} EventDeck;
+
+/* The entire mutable state of the simulation. One of these lives on main's
+   stack and is threaded by pointer through every function -- R0.4 forbids
+   globals, and this is what replaces them. */
+typedef struct {
+    Square    board[NUM_SQUARES];
+    Player    players[NUM_PLAYERS];
+    int       order[NUM_PLAYERS];  /* player indices in turn order            */
+    Economy   econ;
+    EventDeck deck;
+    int       round;               /* 1-based                                */
+} GameState;
+
+/* ----------------------------------------------------------- prototypes -- */
+
+/* Every public function in the program is declared here and nowhere else, so
+   a mismatch between what one module produces and another consumes fails the
+   build rather than diverging silently. */
+
+/* Buffers passed to fmt_lkr must be at least this large. */
+#define FMT_BUF 20
+
+/* finance.c -- the money boundary (D6'). These three are the only functions
+   in the program permitted to contain a double. */
+int         money_round(double v);
+int         apply_pct(int value, int percent);
+int         pct_of(int value, int percent);
+const char *fmt_lkr(char *buf, int amount);
+int         net_worth(const GameState *g, int p);
+
+/* board.c -- randomness. Seeded once in main; every random draw in the
+   program goes through rng_range so the bias fix applies everywhere. */
+int rng_range(int lo, int hi);
+int roll_die(void);
+int roll_dice(int *d1, int *d2);
+
+/* board.c -- the board table and movement.
+   board_init reads Rent.csv (D27); csvPath is an explicit override or NULL
+   to search the candidate list. Both return false, having explained the
+   failure on stderr, if the file cannot be loaded. */
+bool board_init(GameState *g, const char *csvPath);
+void move_player(GameState *g, int p, int steps);
+
+/* game.c -- the simulation engine. */
+bool game_init(GameState *g, const char *csvPath);
+void determine_order(GameState *g);
+void play_turn(GameState *g, int p);
+void play_round(GameState *g);
+bool game_over(const GameState *g);
+void game_run(GameState *g);
+void round_summary(const GameState *g);
+void market_conditions(const GameState *g);
+void final_report(const GameState *g);
+
+#endif /* TYPES_H */

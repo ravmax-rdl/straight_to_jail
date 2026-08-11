@@ -1,0 +1,12 @@
+# Build artefacts
+monopoly
+monopoly.exe
+straight_to_jail
+straight_to_jail.exe
+a.exe
+a.out
+*.o
+
+# Scratch output from the verification cycle
+run*.txt
+spec.txt

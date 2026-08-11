@@ -483,11 +483,58 @@ Rule-LK 29, which prices damaged-building renovation differently from ordinary r
 | Board | 40 | Table 1 |
 | Players | 4 | Rule 1 |
 | Colour groups | 8 | Appendix B |
+| Properties | 22 | Table 1 / `Rent.csv` |
 | Event cards | 20 | Appendix A |
-| Effects | 64 | worst-case analysis |
+| Effects | 128 | worst-case analysis |
+| CSV line buffer | 256 bytes | longest real line ≈ 45 |
 
 None of these change at runtime, so none of them need allocation. That eliminates leaks, null
 checks, and lifetime bugs as categories rather than managing them.
+
+## Loading external data into a fixed array
+
+`Rent.csv` is the one input that arrives from outside the program, and it is where the no-allocation
+rule looks hardest to keep. It is not, and the reason is worth stating because it generalises.
+
+**The size is not unknown — it is just written somewhere other than the source.** There are 22
+properties because Table 1 says so. The CSV supplies their prices; it does not get to decide how
+many there are. So the destination array already exists at the right size, and reading the file is a
+matter of filling in cells rather than discovering a shape.
+
+That turns the reader into one reused stack buffer:
+
+```c
+char line[CSV_LINE_MAX];
+
+while (fgets(line, (int)sizeof line, f) != NULL) {
+    /* parse into g->board[sq], then reuse the buffer */
+}
+```
+
+256 bytes total, whatever the file's length.
+
+**Join on a key, not on position.** The CSV is ordered by colour group; the board is in board order.
+Nothing keeps those two orderings in step, and pairing them by row index would break silently the
+first time either is edited. Matching the CSV's `Property` column against `LAYOUT[i].name` makes the
+relationship explicit and makes a mismatch reportable:
+
+```c
+sq = property_square_named(field[1]);
+if (sq < 0) { /* "Atlantis" is not a property on the board */ }
+```
+
+**Validate the whole, not just the parts.** Per-row checks catch a corrupt row. They cannot catch a
+*missing* row — every line present is valid, and the file is still wrong. So the loader counts what
+it loaded and, at EOF, verifies all 22 property squares were covered. Without that check the game
+runs with one property priced at zero, which no output message would ever flag.
+
+**Fail loudly and early.** A partially-loaded board is worse than no board, so the loader returns
+`false` and `main` exits 1. It runs *before* the §5 banner is printed, so the failure produces a
+clean stderr diagnostic and zero bytes on stdout rather than half a pre-game block.
+
+The general shape — *the size comes from the specification, the values come from the file, the join
+is on a key, and the whole is validated before use* — is how you read external data without either
+allocating or trusting it.
 
 ## The circular queue
 
@@ -837,6 +884,9 @@ failing test this build model allows.
 | Fat `Square` struct, not a union | 1.4 KB is cheaper than a silent wrong-member read |
 | `GameState` threaded by pointer | signatures document reach; no ambient mutable state |
 | Fixed arrays, no `malloc` | every size is known; removes a whole class of bug |
+| `Rent.csv` read at runtime | the lecturer's file is the single source of truth; a transcribed copy would be a second one, free to drift |
+| CSV joined on property name | the file's order and the board's are unrelated; positional pairing breaks silently |
+| CSV load fatal, before the banner | a partial board is worse than none; stderr keeps the graded stdout clean |
 | Effect registry for temporary modifiers | LK 34 stacking and LK 35 reversion become free |
 | Permanent effects mutate storage | only inflation; LK 14 says values are recalculated |
 | Three choke points | eight modifiers in one place instead of seventy-two |
