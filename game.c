@@ -336,14 +336,62 @@ void final_report(const GameState *g)
 
 /* Rule 3. Steps 2 and 3 only for now; the remaining six arrive with the
    systems they depend on, in the order the milestones introduce them. */
+/* ----------------------------------------------------------- landing --- */
+
+/* Rule 3 step 4: resolve whatever the square the player stopped on does.
+ *
+ * Every SquareType is listed explicitly and there is no default label. That
+ * is deliberate: adding a type later produces
+ *   warning: enumeration value 'SQ_X' not handled in switch
+ * at exactly the places that need updating. A default: would compile
+ * silently and do nothing, which is the failure this switch exists to
+ * prevent.
+ */
+void land_on(GameState *g, int p, int sq, int diceTotal)
+{
+    (void)diceTotal;    /* utilities need it from milestone 2.2 onward */
+
+    switch (g->board[sq].type) {
+    case SQ_TAX:
+        pay_income_tax(g, p);
+        break;
+
+    case SQ_COMMUNITY:                      /* D17: levies, never draws */
+        pay_community_fund(g, p);
+        break;
+
+    /* Nothing to resolve. GO already paid during movement (Rule 4); Jail
+       here is Just Visiting; Free Parking does nothing in this ruleset. */
+    case SQ_GO:
+    case SQ_JAIL:
+    case SQ_PARKING:
+        break;
+
+    /* Still to come, each in its own step. */
+    case SQ_PROPERTY:
+    case SQ_RAILWAY:
+    case SQ_UTILITY:
+    case SQ_BANK:
+    case SQ_INSURANCE:
+    case SQ_EVENT:
+    case SQ_GOTOJAIL:
+        break;
+    }
+}
+
+/* ------------------------------------------------------------- a turn --- */
+
+/* Rule 3's eight steps. Steps arrive as the milestones implement them; the
+   numbering below tracks the rule so the gaps stay visible. */
 void play_turn(GameState *g, int p)
 {
     int d1, d2, total;
 
-    total = roll_dice(&d1, &d2);
+    total = roll_dice(&d1, &d2);                    /* 2. roll two dice   */
     printf("%s rolled %d.\n", g->players[p].name, total);
 
-    move_player(g, p, total);
+    move_player(g, p, total);                       /* 3. move clockwise  */
+    land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
 }
 
 /* One round is one turn for every solvent player, in order[] sequence --

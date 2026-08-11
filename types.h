@@ -299,6 +299,19 @@ int         pct_of(int value, int percent);
 const char *fmt_lkr(char *buf, int amount);
 int         net_worth(const GameState *g, int p);
 
+/* finance.c -- money movement. These two are the only functions in the
+   program that assign to Player.cash. charge returns false, having moved
+   nothing, when the player cannot cover the amount; the D11 recovery ladder
+   replaces that in milestone 3. */
+void credit(GameState *g, int p, int amt);
+bool charge(GameState *g, int p, int amt, int toPlayer);
+
+/* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
+   assets), so deliberately two functions rather than one parameterised. */
+int  total_assets(const GameState *g, int p);
+void pay_income_tax(GameState *g, int p);
+void pay_community_fund(GameState *g, int p);
+
 /* board.c -- randomness. Seeded once in main; every random draw in the
    program goes through rng_range so the bias fix applies everywhere. */
 int rng_range(int lo, int hi);
@@ -335,6 +348,7 @@ void play_turn(GameState *g, int p);
 void play_round(GameState *g);
 bool game_over(const GameState *g);
 void game_run(GameState *g);
+void land_on(GameState *g, int p, int sq, int diceTotal);
 void round_summary(const GameState *g);
 void market_conditions(const GameState *g);
 void final_report(const GameState *g);

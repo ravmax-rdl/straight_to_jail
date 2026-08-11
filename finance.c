@@ -41,6 +41,122 @@ int pct_of(int value, int percent)
     return money_round((double)value * (percent / 100.0));
 }
 
+/* ------------------------------------------------------- money movement -- */
+/*
+ * Every rupee that moves in this simulation moves through credit or charge.
+ * Nothing else assigns to Player.cash. That is what makes the D11 debt
+ * recovery ladder a milestone-3 change to one function rather than an audit
+ * of forty call sites, and what makes "cash went negative" a question with
+ * exactly one place to look.
+ */
+
+void credit(GameState *g, int p, int amt)
+{
+    g->players[p].cash += amt;
+}
+
+/* Move amt from p to toPlayer, or to the Bank when toPlayer is -1.
+ *
+ * Returns false, having moved nothing, if p cannot cover it. Milestone 3
+ * replaces that with the D11 ladder -- sell buildings at half, mortgage what
+ * is free, and only then declare bankruptcy -- which is why the caller is
+ * given a bool rather than this function simply clamping. Until then an
+ * unpayable charge is reported and skipped, so no balance can go negative
+ * behind our back.
+ */
+bool charge(GameState *g, int p, int amt, int toPlayer)
+{
+    if (amt <= 0) {
+        return true;
+    }
+    if (g->players[p].cash < amt) {
+        return false;
+    }
+
+    g->players[p].cash -= amt;
+    if (toPlayer >= 0) {
+        g->players[toPlayer].cash += amt;
+    }
+    return true;
+}
+
+/* D16. The Community Development Fund's base and nothing else's: the sum of
+ * square_value over the 22 COLOURED properties p owns. Buildings, railways
+ * and utilities are excluded.
+ *
+ * Reading square_value is what makes the clarification's "the 10% will also
+ * be affected by the market fluctuations" true for free -- when milestone 4
+ * lands booms and declines, this number moves with them and no code here
+ * changes.
+ */
+int total_assets(const GameState *g, int p)
+{
+    int i, total = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].type == SQ_PROPERTY && g->board[i].owner == p) {
+            total += square_value(g, i);
+        }
+    }
+    return total;
+}
+
+/* ------------------------------------------------------------ the taxes -- */
+/*
+ * Two squares, two bases, two functions. Parameterising one helper would
+ * hide the only interesting thing about them, which is that they tax
+ * different things and therefore punish different strategies: the Fund bites
+ * landholders, Income Tax bites hoarders -- which is the Conservative
+ * Banker's whole plan.
+ */
+
+/* Rule 11 as the clarification restates it (D2'): 15% of the player's
+ * CURRENT CASH, not of a fixed sum and not of their assets.
+ *
+ * The rate lives in econ.incomeTaxPct so that milestone 4's inflation can
+ * move it the same way it moves the loan rate (D21). EFF_TAX_MUL scales it
+ * again at charge time -- x1.5 while the Increase Property Tax regulation is
+ * active.
+ */
+void pay_income_tax(GameState *g, int p)
+{
+    char b[FMT_BUF];
+    int  rate = apply_pct(g->econ.incomeTaxPct,
+                          effect_modifier(g, EFF_TAX_MUL, g->players[p].pos, p));
+    int  due  = pct_of(g->players[p].cash, rate);
+
+    printf("%s landed on Income Tax.\n", g->players[p].name);
+    if (charge(g, p, due, -1)) {
+        printf("Income Tax Paid : LKR %s.\n", fmt_lkr(b, due));
+        printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+    } else {
+        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, due));
+    }
+}
+
+/* D16/D17. Square 2 is a Community Development Fund square, not a card
+ * square: Table 1 types it "Event", but it levies rather than draws, which
+ * is why the three card squares are 7, 22 and 36 only.
+ *
+ * A player owning nothing pays nothing, which is correct -- the levy is on
+ * landholding.
+ */
+void pay_community_fund(GameState *g, int p)
+{
+    char b[FMT_BUF];
+    int  assets = total_assets(g, p);
+    int  due    = pct_of(assets, COMMUNITY_PCT);
+
+    printf("%s landed on the Community Development Fund.\n", g->players[p].name);
+    printf("Total Property Assets : LKR %s.\n", fmt_lkr(b, assets));
+    if (charge(g, p, due, -1)) {
+        printf("Contribution Paid : LKR %s.\n", fmt_lkr(b, due));
+        printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+    } else {
+        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, due));
+    }
+}
+
 /* Rule 15's balance sheet:
  *   cash + property + buildings + railway + utility + claims receivable
  *        - loans - accrued interest - taxes due
