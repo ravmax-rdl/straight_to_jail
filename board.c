@@ -458,6 +458,137 @@ bool board_init(GameState *g, const char *csvPath)
     return load_rent_csv(g, csvPath);
 }
 
+/* --------------------------------------------------------- the tables 2 -- */
+
+/* Table 6, indexed by house count. A table rather than an if-chain so it can
+   be checked against the spec by eye, and so it cannot grow an unreachable
+   branch. Hotels are separate because Rule 10 makes them mutually exclusive
+   with houses rather than a fifth house. */
+static const int RENT_MULT[MAX_HOUSES + 1] = { 1, 2, 3, 5, 7 };
+#define HOTEL_RENT_MULT 10
+
+/* Table 7, indexed by (stations owned - 1). Index -1 never happens: a
+   railway with no owner charges no rent and returns before the lookup. */
+static const int RAILWAY_RENT[4] = { 250, 500, 1000, 2000 };
+
+/* Table 8. */
+#define UTILITY_MULT_ONE   4
+#define UTILITY_MULT_BOTH 10
+
+/* ---------------------------------------------------------- ownership -- */
+
+/* Rule 5's "purchasable square". Everything else is either unowned forever
+   (GO, Jail, tax squares) or not a thing anyone can hold. */
+bool is_purchasable(const GameState *g, int sq)
+{
+    SquareType t = g->board[sq].type;
+
+    return t == SQ_PROPERTY || t == SQ_RAILWAY || t == SQ_UTILITY;
+}
+
+/* How many squares of one type p owns. Railway and utility rent both key off
+   this, and so does the monopoly test in milestone 3. */
+int count_owned(const GameState *g, int p, SquareType type)
+{
+    int i, n = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].type == type && g->board[i].owner == p) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* ------------------------------------------------------- choke points -- */
+/*
+ * Every modifier in the game is read in one of the four functions below, and
+ * nowhere else. A property's value is wanted by net worth, insurance
+ * premiums, auction openings, renovation, the tax base and three of the four
+ * strategies; its rent by roughly twenty call sites. Inlining the modifier
+ * arithmetic at each would mean dozens of places to keep correct, and a
+ * missed one does not crash -- it quietly reports a wrong number.
+ *
+ * The player argument to effect_modifier is the square's OWNER: an effect
+ * that attaches to a player (Appendix A) reaches the holdings of that
+ * player. An unowned square has owner -1, so only global effects reach it,
+ * which is what we want for an auction opening on a Bank-held property.
+ */
+
+/* D18: market value is built on the INDIVIDUAL price from Rent.csv. Used for
+ * purchase, net worth, the Community Development Fund base, renovation and
+ * auction openings.
+ *
+ * Milestone 5 inserts depreciation (LK 16) and structural damage (LK 28)
+ * between the stored price and the effect multiplier -- inside this function
+ * and nowhere else.
+ */
+int square_value(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    return apply_pct(s->price, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
+}
+
+/* D18 again, and the reason this is not square_value: mortgage value comes
+ * from the GROUP table in Appendix B, not from the individual price. It
+ * governs loan capacity and debt-recovery proceeds only. Keeping the two in
+ * separate functions is what stops them being confused at a call site. */
+int mortgage_value(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    return apply_pct(s->mortgageValue, effect_modifier(g, EFF_MORTGAGE_MUL, sq, s->owner));
+}
+
+/* Rule 7 and Tables 6-8. Returns what the visitor owes the owner.
+ *
+ * Zero in three cases: nobody owns it, it is mortgaged (Rule 7 says a
+ * mortgaged property collects nothing), or it is not a rent-bearing square
+ * at all. Landing on your own property is the caller's business, not this
+ * function's -- it reports what the square is worth, not who is standing on
+ * it.
+ *
+ * diceTotal is used only by utilities, which is why it is a parameter here
+ * rather than something square_rent could look up.
+ */
+int square_rent(const GameState *g, int sq, int diceTotal)
+{
+    const Square *s = &g->board[sq];
+    int rent;
+
+    if (s->owner < 0 || s->mortgaged) {
+        return 0;
+    }
+
+    switch (s->type) {
+    case SQ_PROPERTY:
+        if (s->hotel) {
+            rent = s->baseRent * HOTEL_RENT_MULT;
+            rent = apply_pct(rent, effect_modifier(g, EFF_HOTEL_RENT_MUL, sq, s->owner));
+        } else {
+            rent = s->baseRent * RENT_MULT[s->houses];
+        }
+        return apply_pct(rent, effect_modifier(g, EFF_RENT_MUL, sq, s->owner));
+
+    case SQ_RAILWAY:
+        rent = RAILWAY_RENT[count_owned(g, s->owner, SQ_RAILWAY) - 1];
+        return apply_pct(rent, effect_modifier(g, EFF_RAILWAY_RENT_MUL, sq, s->owner));
+
+    case SQ_UTILITY:
+        rent = diceTotal * (count_owned(g, s->owner, SQ_UTILITY) == 2
+                            ? UTILITY_MULT_BOTH : UTILITY_MULT_ONE);
+        return apply_pct(rent, effect_modifier(g, EFF_UTILITY_RENT_MUL, sq, s->owner));
+
+    case SQ_GO:    case SQ_BANK:      case SQ_INSURANCE: case SQ_TAX:
+    case SQ_COMMUNITY: case SQ_EVENT: case SQ_JAIL:      case SQ_PARKING:
+    case SQ_GOTOJAIL:
+        return 0;
+    }
+
+    return 0;
+}
+
 /* ------------------------------------------------------------- movement -- */
 
 /* Rule 3 step 3 and Rule 4. Moves clockwise, wrapping, and pays the GO
