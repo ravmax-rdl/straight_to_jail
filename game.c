@@ -26,12 +26,17 @@ static const Strategy PLAYER_STRATS[NUM_PLAYERS] = {
 
 /* ------------------------------------------------------- initialisation -- */
 
-void game_init(GameState *g)
+/* Returns false if Rent.csv could not be loaded (D27). board_init has
+   already explained why on stderr; the caller must abandon the run rather
+   than play on a board whose properties have no prices. */
+bool game_init(GameState *g, const char *csvPath)
 {
     int i;
 
     memset(g, 0, sizeof *g);
-    board_init(g);
+    if (!board_init(g, csvPath)) {
+        return false;
+    }
 
     for (i = 0; i < NUM_PLAYERS; i++) {
         Player *p = &g->players[i];
@@ -57,6 +62,7 @@ void game_init(GameState *g)
     g->econ.lastDeclineGroup  = GRP_NONE;
 
     g->round = 0;
+    return true;
 }
 
 /* --------------------------------------------------------- turn order --- */

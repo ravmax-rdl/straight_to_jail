@@ -305,12 +305,15 @@ int rng_range(int lo, int hi);
 int roll_die(void);
 int roll_dice(int *d1, int *d2);
 
-/* board.c -- the board table and movement. */
-void board_init(GameState *g);
+/* board.c -- the board table and movement.
+   board_init reads Rent.csv (D27); csvPath is an explicit override or NULL
+   to search the candidate list. Both return false, having explained the
+   failure on stderr, if the file cannot be loaded. */
+bool board_init(GameState *g, const char *csvPath);
 void move_player(GameState *g, int p, int steps);
 
 /* game.c -- the simulation engine. */
-void game_init(GameState *g);
+bool game_init(GameState *g, const char *csvPath);
 void determine_order(GameState *g);
 void play_turn(GameState *g, int p);
 void play_round(GameState *g);

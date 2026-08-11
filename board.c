@@ -2,6 +2,7 @@
  * and valuation queries every other module asks of it.
  */
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,19 +11,24 @@
 
 /* ------------------------------------------------------------ the tables --
  *
- * D18 splits the two value sources, and keeping them in separate tables is
- * what stops them being confused at a call site:
+ * D18 splits the two value sources, and keeping them apart is what stops
+ * them being confused at a call site:
  *
- *   GROUP_VALUES     Appendix B. Supplies construction costs and mortgage
- *                    value. Its basePrice column is the loan-calculation
- *                    basis named by the clarification -- no buyer is ever
- *                    charged it. Note it equals the cheapest member of each
- *                    group, which is a useful cross-check on the CSV.
+ *   GROUP_VALUES   Appendix B, compiled in. Supplies construction costs and
+ *                  mortgage value. Its basePrice column is the
+ *                  loan-calculation basis named by the clarification -- no
+ *                  buyer is ever charged it. Note it equals the cheapest
+ *                  member of each group, which is a useful cross-check on
+ *                  the CSV.
  *
- *   PROPERTY_VALUES  Rent.csv. Supplies the INDIVIDUAL purchase price and
- *                    base rent actually charged. This is D7': base rent is
- *                    not 10% of anything -- Pettah's 100 on a 1,500 price is
- *                    6.7%, Galle Face's 1,200 on 12,000 is 10%.
+ *   Rent.csv       Read at runtime (R1.3, D7', D27). Supplies the INDIVIDUAL
+ *                  purchase price and base rent actually charged. Base rent
+ *                  is not 10% of anything -- Pettah's 100 on a 1,500 price
+ *                  is 6.7%, Galle Face's 1,200 on 12,000 is 10%.
+ *
+ * The individual values are deliberately NOT compiled in. The lecturer's
+ * file is the single source of truth; a transcribed copy would be a second
+ * one, free to drift out of step the first time either is edited.
  */
 
 typedef struct { int basePrice, house, hotel, mortgage; } GroupValues;
@@ -38,17 +44,11 @@ static const GroupValues GROUP_VALUES[GRP_COUNT] = {
     /* DARKBLUE  */ { 10000, 3000, 12000, 5000 }
 };
 
-typedef struct { int sq, price, baseRent; } PropertyValues;
-
-static const PropertyValues PROPERTY_VALUES[NUM_PROPERTIES] = {
-    {  1,  1500,  100 }, {  3,  1800,  120 },
-    {  6,  2500,  180 }, {  8,  2700,  200 }, {  9,  3000,  220 },
-    { 11,  3500,  260 }, { 13,  3800,  280 }, { 14,  4000,  300 },
-    { 16,  4500,  350 }, { 18,  4700,  370 }, { 19,  5000,  400 },
-    { 21,  5500,  450 }, { 23,  5800,  480 }, { 24,  6000,  500 },
-    { 26,  6500,  600 }, { 27,  6800,  620 }, { 29,  7000,  650 },
-    { 31,  8000,  750 }, { 32,  8300,  780 }, { 34,  8500,  800 },
-    { 37, 10000, 1000 }, { 39, 12000, 1200 }
+/* The CSV's "Property Group" column, in PropertyGroup order. Matching on
+   these lets a mistyped group in the file be caught rather than ignored. */
+static const char *GROUP_NAMES[GRP_COUNT] = {
+    "Brown", "Light Blue", "Pink", "Orange",
+    "Red", "Yellow", "Green", "Dark Blue"
 };
 
 /* Table 1, plus the D14 region tags the economic events need. The tags are a
@@ -145,25 +145,278 @@ int roll_dice(int *d1, int *d2)
     return *d1 + *d2;
 }
 
-/* ------------------------------------------------------- initialisation -- */
+/* -------------------------------------------------------------- Rent.csv --
+ *
+ * D27. The 22 individual purchase prices and base rents are data, not code,
+ * and are read from the lecturer's CSV at startup with plain stdio.
+ *
+ * Everything here works in fixed buffers on the stack. R0.5 forbids dynamic
+ * allocation, and nothing about reading this file needs it: the row count is
+ * known (22 properties), the longest real line is about 45 bytes, and the
+ * destination -- g->board -- already exists. This is the one place in the
+ * program where a reader might reach for malloc, so it is worth saying why
+ * it is absent. POSIX getline() is out for the same reason; it allocates,
+ * and it is not in C99 besides.
+ */
 
-/* Rent.csv is keyed by square index, so this is a lookup rather than a
-   parallel array: the CSV order and the board order are not the same thing,
-   and pairing them positionally would be a silent hazard the first time
-   either is edited. Twenty-two entries scanned once at startup. */
-static const PropertyValues *property_values_for(int sq)
+#define CSV_LINE_MAX  256   /* the longest real line is ~45 bytes           */
+#define CSV_FIELDS      4   /* Property Group, Property, Price, Base Rent   */
+
+/* Searched in order when no path is given on the command line. Covers being
+   run from the repository root and from the source directory, which is the
+   difference between a marker typing ./monopoly and ../monopoly. */
+static const char *CSV_CANDIDATES[] = {
+    "assets/Rent.csv",
+    "Rent.csv",
+    "../assets/Rent.csv"
+};
+#define CSV_CANDIDATE_COUNT ((int)(sizeof CSV_CANDIDATES / sizeof CSV_CANDIDATES[0]))
+
+/* Drop the line terminator. The file may arrive with either ending: it was
+   authored on Windows, while .gitattributes normalises to LF on checkout, so
+   tolerating both is not optional. fgets keeps whatever it found. */
+static void chomp(char *s)
+{
+    size_t n = strlen(s);
+
+    while (n > 0 && (s[n - 1] == '\n' || s[n - 1] == '\r')) {
+        s[--n] = '\0';
+    }
+}
+
+/* Trim surrounding blanks in place, returning the new start. Interior spaces
+   survive, which matters -- "Light Blue" is one field. */
+static char *trim(char *s)
+{
+    char *end;
+
+    while (*s == ' ' || *s == '\t') {
+        s++;
+    }
+    if (*s == '\0') {
+        return s;
+    }
+    for (end = s + strlen(s) - 1; end > s && (*end == ' ' || *end == '\t'); end--) {
+        *end = '\0';
+    }
+    return s;
+}
+
+/* strtol rather than atoi: atoi cannot distinguish "0" from "not a number",
+   which would turn a corrupt cell into a free property. */
+static bool parse_int(const char *s, int *out)
+{
+    char *end;
+    long  v;
+
+    if (*s == '\0') {
+        return false;
+    }
+    v = strtol(s, &end, 10);
+    if (*end != '\0' || v <= 0 || v > INT_MAX) {
+        return false;
+    }
+    *out = (int)v;
+    return true;
+}
+
+static PropertyGroup group_from_name(const char *name)
 {
     int i;
-    for (i = 0; i < NUM_PROPERTIES; i++) {
-        if (PROPERTY_VALUES[i].sq == sq) {
-            return &PROPERTY_VALUES[i];
+
+    for (i = 0; i < GRP_COUNT; i++) {
+        if (strcmp(GROUP_NAMES[i], name) == 0) {
+            return (PropertyGroup)i;
         }
     }
+    return GRP_NONE;
+}
+
+/* Join the CSV to the board on the property NAME rather than on row order.
+   Positional pairing would be a silent hazard the first time either the file
+   or the layout is reordered; a name that does not match is an error we can
+   report. */
+static int property_square_named(const char *name)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (LAYOUT[i].type == SQ_PROPERTY && strcmp(LAYOUT[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static FILE *open_rent_csv(const char *override, const char **usedPath)
+{
+    FILE *f;
+    int   i;
+
+    /* An explicitly supplied path is never second-guessed: if the caller
+       named a file, failing to open that file is the error to report. */
+    if (override != NULL) {
+        *usedPath = override;
+        return fopen(override, "r");
+    }
+
+    for (i = 0; i < CSV_CANDIDATE_COUNT; i++) {
+        f = fopen(CSV_CANDIDATES[i], "r");
+        if (f != NULL) {
+            *usedPath = CSV_CANDIDATES[i];
+            return f;
+        }
+    }
+
+    *usedPath = NULL;
     return NULL;
 }
 
-/* Populate all 40 squares. Called once, from game_init. */
-void board_init(GameState *g)
+static void report_missing_csv(const char *override)
+{
+    int i;
+
+    if (override != NULL) {
+        fprintf(stderr, "straight_to_jail: cannot open %s\n", override);
+        return;
+    }
+
+    fprintf(stderr, "straight_to_jail: cannot open Rent.csv\n");
+    fprintf(stderr, "  tried: %s\n", CSV_CANDIDATES[0]);
+    for (i = 1; i < CSV_CANDIDATE_COUNT; i++) {
+        fprintf(stderr, "         %s\n", CSV_CANDIDATES[i]);
+    }
+    fprintf(stderr, "  pass a path as the 2nd argument:\n");
+    fprintf(stderr, "    monopoly <seed> <path-to-Rent.csv>\n");
+}
+
+/* Overlay the individual values onto an already-laid-out board. Returns
+   false, having explained itself on stderr, if the file is missing, short,
+   or disagrees with the board. */
+static bool load_rent_csv(GameState *g, const char *override)
+{
+    char        line[CSV_LINE_MAX];
+    const char *path   = NULL;
+    FILE       *f      = open_rent_csv(override, &path);
+    int         lineNo = 0;
+    int         loaded = 0;
+    int         i;
+
+    if (f == NULL) {
+        report_missing_csv(override);
+        return false;
+    }
+
+    while (fgets(line, (int)sizeof line, f) != NULL) {
+        char         *field[CSV_FIELDS];
+        char         *tok;
+        int           n = 0;
+        int           sq, price, baseRent;
+        PropertyGroup grp;
+
+        lineNo++;
+        chomp(line);
+
+        if (line[0] == '\0') {
+            continue;                                   /* blank line       */
+        }
+        if (lineNo == 1 && strncmp(line, "Property Group", 14) == 0) {
+            continue;                                   /* header row       */
+        }
+
+        /* Count every field, not just the first four, so both a short row
+           and an over-long one are caught. strtok would fold two adjacent
+           commas into one delimiter and silently shorten the row; the count
+           check is what turns that into a reported error. */
+        for (tok = strtok(line, ","); tok != NULL; tok = strtok(NULL, ",")) {
+            if (n < CSV_FIELDS) {
+                field[n] = trim(tok);
+            }
+            n++;
+        }
+        if (n != CSV_FIELDS) {
+            fprintf(stderr, "straight_to_jail: %s:%d: expected %d fields, found %d\n",
+                    path, lineNo, CSV_FIELDS, n);
+            fclose(f);
+            return false;
+        }
+
+        sq = property_square_named(field[1]);
+        if (sq < 0) {
+            fprintf(stderr, "straight_to_jail: %s:%d: \"%s\" is not a property on the board\n",
+                    path, lineNo, field[1]);
+            fclose(f);
+            return false;
+        }
+
+        grp = group_from_name(field[0]);
+        if (grp != LAYOUT[sq].group) {
+            fprintf(stderr, "straight_to_jail: %s:%d: %s is group \"%s\" here but %s on the board\n",
+                    path, lineNo, field[1], field[0],
+                    LAYOUT[sq].group == GRP_NONE ? "none" : GROUP_NAMES[LAYOUT[sq].group]);
+            fclose(f);
+            return false;
+        }
+
+        if (!parse_int(field[2], &price) || !parse_int(field[3], &baseRent)) {
+            fprintf(stderr, "straight_to_jail: %s:%d: price \"%s\" and base rent \"%s\" "
+                            "must both be positive integers\n",
+                    path, lineNo, field[2], field[3]);
+            fclose(f);
+            return false;
+        }
+
+        if (g->board[sq].price > 0) {
+            fprintf(stderr, "straight_to_jail: %s:%d: duplicate row for %s\n",
+                    path, lineNo, field[1]);
+            fclose(f);
+            return false;
+        }
+
+        g->board[sq].price    = price;      /* D7': individual, not a ratio */
+        g->board[sq].baseRent = baseRent;
+        loaded++;
+    }
+
+    if (ferror(f)) {
+        fprintf(stderr, "straight_to_jail: %s: read error\n", path);
+        fclose(f);
+        return false;
+    }
+    fclose(f);
+
+    /* A file that opened and parsed can still be incomplete. Every property
+       square must have been given a price, or the first player to land on
+       the gap would buy it for nothing. */
+    if (loaded != NUM_PROPERTIES) {
+        for (i = 0; i < NUM_SQUARES; i++) {
+            if (LAYOUT[i].type == SQ_PROPERTY && g->board[i].price <= 0) {
+                fprintf(stderr, "straight_to_jail: %s: no row for \"%s\" (square %d)\n",
+                        path, LAYOUT[i].name, i);
+            }
+        }
+        fprintf(stderr, "straight_to_jail: %s: read %d properties, expected %d\n",
+                path, loaded, NUM_PROPERTIES);
+        return false;
+    }
+
+    return true;
+}
+
+/* ------------------------------------------------------- initialisation -- */
+
+/* Populate all 40 squares. Called once, from game_init.
+ *
+ * Two passes by necessity: the layout and the group-derived values are
+ * compiled in and go down first, then Rent.csv overlays the individual price
+ * and base rent onto the property squares. csvPath is argv[2] when the user
+ * supplied one and NULL otherwise, in which case D27's candidate list is
+ * searched.
+ *
+ * Returns false if the CSV could not be loaded. The caller must not continue
+ * -- a board whose properties have no prices is not a game.
+ */
+bool board_init(GameState *g, const char *csvPath)
 {
     int i;
 
@@ -186,14 +439,13 @@ void board_init(GameState *g)
         s->policy         = INS_NONE;
 
         if (s->type == SQ_PROPERTY) {
-            const PropertyValues *pv = property_values_for(i);
-            const GroupValues    *gv = &GROUP_VALUES[s->group];
+            const GroupValues *gv = &GROUP_VALUES[s->group];
 
-            s->price     = pv->price;      /* D7': individual, from Rent.csv */
-            s->baseRent  = pv->baseRent;   /* D7': individual, not a ratio   */
-            s->mortgageValue = gv->mortgage;  /* D18: group, loans only      */
-            s->houseCost = gv->house;
-            s->hotelCost = gv->hotel;
+            /* D18: the group supplies construction cost and mortgage value
+               only. price and baseRent arrive from the CSV below. */
+            s->mortgageValue = gv->mortgage;
+            s->houseCost     = gv->house;
+            s->hotelCost     = gv->hotel;
         } else if (s->type == SQ_RAILWAY || s->type == SQ_UTILITY) {
             /* The PDF prices neither; the clarification sets both at 1,500
                with a 750 mortgage. Rent comes from Tables 7 and 8 rather
@@ -202,6 +454,8 @@ void board_init(GameState *g)
             s->mortgageValue = STATION_MORTGAGE;
         }
     }
+
+    return load_rent_csv(g, csvPath);
 }
 
 /* ------------------------------------------------------------- movement -- */
