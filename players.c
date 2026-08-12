@@ -118,3 +118,42 @@ int decide_build(GameState *g, int p)
 
     return best;
 }
+
+/* Table 3's second band edge. Above it a building still collects 90% or
+   100% of its rent; at 74% the factor drops to 75%, which is the first cut
+   worth paying to avoid. */
+#define MAINTAIN_BELOW_PCT 75
+
+/* PLACEHOLDER (milestone 6). Rule 3 step 1 and LK 27: which building to
+ * restore to full condition, or -1 for none. One square per call; game.c
+ * repeats until this stops offering, which is how LK 27's "any number of
+ * buildings if affordable" is expressed without this function executing
+ * anything.
+ *
+ * Maintaining at 75% rather than on the way down from 100 is the cheap
+ * reading of Table 3: condition falls 2% a round, so a property serviced at
+ * the band edge collects full rent for the seven rounds it takes to slip
+ * back, and pays once for them. Servicing at 99% would pay the same price
+ * for one round of benefit.
+ */
+int decide_maintenance(GameState *g, int p)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+
+        if (s->owner != p || development_level(g, i) == 0) {
+            continue;
+        }
+        if (s->conditionPct >= MAINTAIN_BELOW_PCT) {
+            continue;
+        }
+        if (g->players[p].cash < maintenance_cost(g, i)) {
+            continue;
+        }
+        return i;
+    }
+
+    return -1;
+}

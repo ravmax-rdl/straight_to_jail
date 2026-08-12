@@ -528,6 +528,43 @@ static void build_step(GameState *g, int p)
     }
 }
 
+/* --------------------------------------------------------- maintenance -- */
+
+/* Rule 3 step 1 and LK 27. The rule is emphatic that maintenance happens
+ * here and nowhere else -- not on landing, not at the end of the round -- so
+ * a property that decays past a band edge stays there until its owner's next
+ * turn comes round.
+ *
+ * Loops for the same reason build_step does: LK 27 allows any number of
+ * buildings to be serviced if the owner can afford them. It terminates
+ * because each pass restores one square to 100%, which puts it above the
+ * threshold decide_maintenance selects on.
+ *
+ * Cash is tested before charging, on the same principle as construction:
+ * upkeep is voluntary, and selling a building to fund the maintenance of
+ * another building is not a trade the D11 ladder should ever be asked to
+ * make.
+ */
+static void maintenance_step(GameState *g, int p)
+{
+    char b[FMT_BUF];
+    int  sq;
+
+    while ((sq = decide_maintenance(g, p)) >= 0) {
+        Square *s    = &g->board[sq];
+        int     cost = maintenance_cost(g, sq);
+
+        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+            return;
+        }
+
+        s->conditionPct       = 100;
+        s->unmaintainedRounds = 0;    /* LK 28's clock restarts             */
+        printf("%s maintained %s.\n", g->players[p].name, s->name);
+        printf("Maintenance Cost : LKR %s.\n", fmt_lkr(b, cost));
+    }
+}
+
 /* ---------------------------------------------------------- invariants --- */
 
 /* Development rules that must hold after every turn, checked only in the
@@ -582,12 +619,16 @@ void play_turn(GameState *g, int p)
 {
     int d1, d2, total;
 
+    maintenance_step(g, p);                         /* 1. upkeep (LK 27)  */
+
     total = roll_dice(&d1, &d2);                    /* 2. roll two dice   */
     printf("%s rolled %d.\n", g->players[p].name, total);
 
-    /* 1. resolve outstanding penalties. The roll happens first only because
-       Rule 13's doubles test needs it; a jailed player who stays in has
-       simply spent their turn on the attempt. */
+    /* 1. resolve outstanding penalties. Also step 1, and it lands after the
+       roll only because Rule 13's doubles test needs the dice. Maintenance
+       above needs none, so it keeps its place at the head of the turn --
+       and a player who stays in Jail has still had their upkeep, which is
+       right: LK 27 ties maintenance to the turn, not to the movement. */
     if (!resolve_jail(g, p, d1, d2)) {
         return;
     }
@@ -620,6 +661,7 @@ void play_round(GameState *g)
 
     /* D13 puts these last and in this order. The economic cadences slot in
        above them as the milestones introduce them. */
+    condition_tick(g);              /* LK 25: buildings age by the round   */
     round_summary(g);
     market_conditions(g);
 }

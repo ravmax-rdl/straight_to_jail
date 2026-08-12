@@ -168,6 +168,8 @@ typedef enum {
 #define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
 #define COMMUNITY_PCT       10   /* D16: of total property assets            */
 #define COND_DECAY_PCT       2   /* LK 25                                    */
+#define MAINT_HOUSE_PCT      5   /* LK 27: per house, of construction cost   */
+#define MAINT_HOTEL_PCT      8   /* LK 27: per hotel, of construction cost   */
 #define DEPREC_START_AGE    50   /* LK 16                                    */
 #define DEPREC_CAP_PCT      30   /* LK 16                                    */
 #define RENOVATE_PCT        10   /* LK 17                                    */
@@ -347,6 +349,12 @@ int mortgage_value(const GameState *g, int sq);
 int square_rent(const GameState *g, int sq, int diceTotal);
 int building_cost(const GameState *g, int sq, bool hotel);
 
+/* board.c -- building condition (LK 25-27). condition_tick runs once at the
+   end of every round; maintenance_cost prices a full restoration. Table 3's
+   rent bands are applied inside square_rent and read nowhere else. */
+void condition_tick(GameState *g);
+int  maintenance_cost(const GameState *g, int sq);
+
 /* events.c -- the effect registry (D12). Stubbed to 0 until milestone 4;
    the signature is final. */
 int effect_modifier(const GameState *g, EffectKind kind, int square, int player);
@@ -358,6 +366,7 @@ int effect_modifier(const GameState *g, EffectKind kind, int square, int player)
 bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
 int  decide_build(GameState *g, int p);
+int  decide_maintenance(GameState *g, int p);
 
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);
