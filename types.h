@@ -136,6 +136,14 @@ typedef enum {
     SCOPE_GLOBAL, SCOPE_GROUP, SCOPE_REGION, SCOPE_SQUARE, SCOPE_PLAYER
 } EffectScope;
 
+/* LK 5's five loan actions, plus doing nothing. R1.8 allows exactly one per
+   landing on the Bank square, which is what makes this an enum rather than a
+   set of flags: decide_bank picks one and game.c performs it. */
+typedef enum {
+    BANK_NONE, BANK_OBTAIN, BANK_REPAY_PART, BANK_REPAY_FULL,
+    BANK_EXTEND, BANK_INCREASE
+} BankAction;
+
 /* D14 region tags. A bitmask rather than an enum because a square belongs to
    several regions at once -- Trincomalee is northern, eastern and coastal. */
 #define REGION_WESTERN          0x01u
@@ -168,6 +176,8 @@ typedef enum {
 #define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
 #define COMMUNITY_PCT       10   /* D16: of total property assets            */
 #define COND_DECAY_PCT       2   /* LK 25                                    */
+#define MAINT_HOUSE_PCT      5   /* LK 27: per house, of construction cost   */
+#define MAINT_HOTEL_PCT      8   /* LK 27: per hotel, of construction cost   */
 #define DEPREC_START_AGE    50   /* LK 16                                    */
 #define DEPREC_CAP_PCT      30   /* LK 16                                    */
 #define RENOVATE_PCT        10   /* LK 17                                    */
@@ -299,12 +309,18 @@ int         pct_of(int value, int percent);
 const char *fmt_lkr(char *buf, int amount);
 int         net_worth(const GameState *g, int p);
 
-/* finance.c -- money movement. These two are the only functions in the
-   program that assign to Player.cash. charge returns false, having moved
-   nothing, when the player cannot cover the amount; the D11 recovery ladder
-   replaces that in milestone 3. */
+/* finance.c -- money movement. charge is the single place in the program
+   where insolvency is detected: a short payer goes through the D11 ladder,
+   and one the ladder cannot save is declared bankrupt on the spot. It
+   returns false only in that case, with the block already printed. */
 void credit(GameState *g, int p, int amt);
 bool charge(GameState *g, int p, int amt, int toPlayer);
+
+/* finance.c -- Rule 11's debt recovery and Rule 14's bankruptcy (D11).
+   raise_funds is called by charge and by nothing else; creditor is -1 when
+   the Bank is owed. */
+bool raise_funds(GameState *g, int p, int needed);
+void declare_bankrupt(GameState *g, int p, int creditor);
 
 /* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
    assets), so deliberately two functions rather than one parameterised. */
@@ -316,6 +332,21 @@ int  auction_opening(const GameState *g, int sq);
 void run_auction(GameState *g, int sq, int anchorPlayer);
 void pay_income_tax(GameState *g, int p);
 void pay_community_fund(GameState *g, int p);
+
+/* finance.c -- loans (LK 1-7, D4, D5, D22). loan_capacity is the 75% LTV of
+   collateral still free to pledge; max_loan is the same figure gated by
+   LK 5's one-loan-at-a-time rule, which is why the increase action reads the
+   former. accrue_interest and check_loan_default run once per round in that
+   order (D13), so a loan can default on the interest it has just accrued. */
+bool eligible_collateral(const GameState *g, int p, int sq);
+int  loan_capacity(const GameState *g, int p);
+int  max_loan(const GameState *g, int p);
+void grant_loan(GameState *g, int p, int amount);
+void increase_loan(GameState *g, int p, int extra);
+void extend_loan(GameState *g, int p);
+void repay_loan(GameState *g, int p, int amount);
+void accrue_interest(GameState *g);
+void check_loan_default(GameState *g);
 
 /* board.c -- randomness. Seeded once in main; every random draw in the
    program goes through rng_range so the bias fix applies everywhere. */
@@ -330,17 +361,28 @@ int roll_dice(int *d1, int *d2);
 bool board_init(GameState *g, const char *csvPath);
 void move_player(GameState *g, int p, int steps);
 
-/* board.c -- ownership queries. */
+/* board.c -- ownership queries. development_level puts houses and hotels on
+   one scale (0-4, then MAX_HOUSES + 1) so Rule 9's evenness can be judged;
+   a hotel stores houses == 0 and would otherwise read as an empty lot. */
 bool is_purchasable(const GameState *g, int sq);
 int  count_owned(const GameState *g, int p, SquareType type);
+bool group_monopoly(const GameState *g, int p, PropertyGroup grp);
+int  development_level(const GameState *g, int sq);
 
 /* board.c -- the choke points. Every timed modifier in the game is read in
    one of these four and nowhere else. square_value is built on the
-   individual Rent.csv price; mortgage_value on the Appendix B group figure
-   (D18), which is why they are separate functions. */
+   individual Rent.csv price; mortgage_value and building_cost on the
+   Appendix B group figures (D18), which is why they are separate functions. */
 int square_value(const GameState *g, int sq);
 int mortgage_value(const GameState *g, int sq);
 int square_rent(const GameState *g, int sq, int diceTotal);
+int building_cost(const GameState *g, int sq, bool hotel);
+
+/* board.c -- building condition (LK 25-27). condition_tick runs once at the
+   end of every round; maintenance_cost prices a full restoration. Table 3's
+   rent bands are applied inside square_rent and read nowhere else. */
+void condition_tick(GameState *g);
+int  maintenance_cost(const GameState *g, int sq);
 
 /* events.c -- the effect registry (D12). Stubbed to 0 until milestone 4;
    the signature is final. */
@@ -352,6 +394,12 @@ int effect_modifier(const GameState *g, EffectKind kind, int square, int player)
    minBid is the smallest legal bid right now. */
 bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
+int  decide_build(GameState *g, int p);
+int  decide_maintenance(GameState *g, int p);
+
+/* decide_bank returns the one LK 5 action to take on this landing (R1.8),
+   writing the sum involved to *amount for the three that need one. */
+BankAction decide_bank(GameState *g, int p, int *amount);
 
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);

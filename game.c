@@ -6,6 +6,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>   /* abort(), in the DEBUG invariant guards only */
 #include <string.h>
 
 #include "types.h"
@@ -378,11 +379,35 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     }
 
     printf("%s landed on %s.\n", g->players[p].name, s->name);
+
+    /* No else branch. charge now runs the D11 ladder and prints Rule 14's
+       bankruptcy block if the ladder cannot save the payer, by which point
+       the creditor has already received whatever was left. */
     if (charge(g, p, rent, s->owner)) {
         printf("Rent Paid : LKR %s.\n", fmt_lkr(b, rent));
         printf("Owner : %s.\n", g->players[s->owner].name);
-    } else {
-        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, rent));
+    }
+}
+
+/* R1.8 and LK 5. One action per landing, and the only route to repayment
+ * there is -- a player who never lands on square 38 inside their term
+ * defaults, which is the clarified rule rather than an oversight.
+ *
+ * Every case is listed and there is no default label, for the same reason
+ * land_on has none: adding a sixth action should break the build here.
+ */
+static void bank_visit(GameState *g, int p)
+{
+    int        amount = 0;
+    BankAction act    = decide_bank(g, p, &amount);
+
+    switch (act) {
+    case BANK_OBTAIN:     grant_loan(g, p, amount);     break;
+    case BANK_REPAY_PART:
+    case BANK_REPAY_FULL: repay_loan(g, p, amount);     break;
+    case BANK_EXTEND:     extend_loan(g, p);            break;
+    case BANK_INCREASE:   increase_loan(g, p, amount);  break;
+    case BANK_NONE:                                     break;
     }
 }
 
@@ -420,8 +445,11 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         printf("%s was sent to Jail.\n", g->players[p].name);
         break;
 
-    /* Still to come, each in its own step. */
     case SQ_BANK:
+        bank_visit(g, p);
+        break;
+
+    /* Still to come, each in its own step. */
     case SQ_INSURANCE:
     case SQ_EVENT:
         break;
@@ -477,6 +505,176 @@ static bool resolve_jail(GameState *g, int p, int d1, int d2)
     return false;
 }
 
+/* ---------------------------------------------------------- invariants --- */
+
+/* State that must hold after every turn, checked only in the debug build.
+ * Both failures are silent in ordinary play -- they surface as rents and
+ * loan capacities that are merely wrong -- so they are worth catching at the
+ * turn that caused them.
+ *
+ * Rule 9's evenness is NOT here, and the omission is deliberate. See
+ * assert_builds_evenly.
+ */
+#ifdef DEBUG
+static void assert_invariants(const GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].houses > 0 && g->board[i].hotel) {
+            fprintf(stderr, "R%d: square %d holds houses and a hotel (Rule 10)\n",
+                    g->round, i);
+            abort();
+        }
+
+        /* A lock outliving its loan would silently sterilise an asset:
+           eligible_collateral would refuse to pledge it and the D11 ladder
+           would refuse to mortgage it, forever. Both ends that clear a loan
+           unlock, so this catches a third one appearing. */
+        if (g->board[i].loanLocked) {
+            int owner = g->board[i].owner;
+
+            if (owner < 0 || !g->players[owner].loan.active) {
+                fprintf(stderr, "R%d: square %d is loan-locked without a loan (LK 3)\n",
+                        g->round, i);
+                abort();
+            }
+        }
+    }
+}
+
+/* Rule 9, checked where it actually applies: the moment a building is added.
+ *
+ * Deviation from the plan, which states this as a board invariant --
+ * max(houses) - min(houses) <= 1 across every group, asserted each turn. It
+ * cannot be one. Foreclosure demolishes the buildings on the squares a loan
+ * pledged and leaves their groupmates untouched, so LK 6 itself produces a
+ * group standing at 0 and 4; a player who buys the stripped square back at
+ * auction then re-assembles a monopoly that is legitimately five levels
+ * apart, and the builder needs several turns to level it up again. Every one
+ * of those states is one the rules asked for, and the plan's invariant fired
+ * on all of them -- on six of the seven seeds tried.
+ *
+ * The plan's wording is also incompatible with hotels on its own terms: a
+ * hotel stores houses == 0, so a group holding one hotel and two four-house
+ * properties reads max 4, min 0 and fails an invariant it satisfies. That is
+ * why the comparison below is on development_level.
+ *
+ * What Rule 9 does guarantee is that no building is ever ADDED to a square
+ * standing above its group's minimum. That is the property the even-building
+ * rule is really about, it holds without exception, and it is what catches
+ * the failure this guard exists for -- decide_build picking anything other
+ * than the least developed square.
+ */
+static void assert_builds_evenly(const GameState *g, int sq)
+{
+    PropertyGroup grp   = g->board[sq].group;
+    int           level = development_level(g, sq);
+    int           i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && development_level(g, i) < level) {
+            fprintf(stderr,
+                    "R%d: building on square %d at level %d over square %d at level %d (Rule 9)\n",
+                    g->round, sq, level, i, development_level(g, i));
+            abort();
+        }
+    }
+}
+#endif
+
+/* --------------------------------------------------------- construction -- */
+
+/* Rule 3 step 6. Builds until the strategy stops asking, which is what lets
+ * Rule 9's "max houses immediately" personalities exist at all -- the rule
+ * puts no cap on how many buildings one turn may raise.
+ *
+ * The loop terminates because every iteration raises one square's development
+ * level by one and the levels are bounded: at most 5 per square across 22
+ * properties, and each level costs money the player must already hold.
+ *
+ * Note the explicit cash test before charge(). Every other charge in the
+ * program is a debt the rules impose, and reaching for the D11 recovery
+ * ladder to meet one is correct. Construction is not a debt -- a player who
+ * would have to sell buildings to fund a building is simply not building, so
+ * this checks first and never lets a voluntary spend touch the ladder.
+ */
+static void build_step(GameState *g, int p)
+{
+    char b[FMT_BUF];
+    int  sq;
+
+    while ((sq = decide_build(g, p)) >= 0) {
+        Square *s     = &g->board[sq];
+        bool    hotel = (s->houses == MAX_HOUSES);
+        int     cost  = building_cost(g, sq, hotel);
+
+#ifdef DEBUG
+        assert_builds_evenly(g, sq);
+#endif
+
+        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+            return;
+        }
+
+        if (hotel) {
+            /* Rule 10: a hotel REPLACES the four houses rather than joining
+               them. Both fields are written so the two can never coexist. */
+            s->houses = 0;
+            s->hotel  = true;
+            printf("%s upgraded %s to a Hotel.\n", g->players[p].name, s->name);
+            /* Section 5 gives the hotel upgrade no cost line, unlike house
+               construction. The asymmetry is in the template, not an
+               oversight here. */
+        } else {
+            s->houses++;
+            printf("%s constructed one house on %s.\n", g->players[p].name, s->name);
+            printf("Construction Cost : LKR %s.\n", fmt_lkr(b, cost));
+        }
+
+        s->conditionPct       = 100;    /* LK 25: new work begins sound      */
+        s->unmaintainedRounds = 0;
+    }
+}
+
+/* --------------------------------------------------------- maintenance -- */
+
+/* Rule 3 step 1 and LK 27. The rule is emphatic that maintenance happens
+ * here and nowhere else -- not on landing, not at the end of the round -- so
+ * a property that decays past a band edge stays there until its owner's next
+ * turn comes round.
+ *
+ * Loops for the same reason build_step does: LK 27 allows any number of
+ * buildings to be serviced if the owner can afford them. It terminates
+ * because each pass restores one square to 100%, which puts it above the
+ * threshold decide_maintenance selects on.
+ *
+ * Cash is tested before charging, on the same principle as construction:
+ * upkeep is voluntary, and selling a building to fund the maintenance of
+ * another building is not a trade the D11 ladder should ever be asked to
+ * make.
+ */
+static void maintenance_step(GameState *g, int p)
+{
+    char b[FMT_BUF];
+    int  sq;
+
+    while ((sq = decide_maintenance(g, p)) >= 0) {
+        Square *s    = &g->board[sq];
+        int     cost = maintenance_cost(g, sq);
+
+        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+            return;
+        }
+
+        s->conditionPct       = 100;
+        s->unmaintainedRounds = 0;    /* LK 28's clock restarts             */
+        printf("%s maintained %s.\n", g->players[p].name, s->name);
+        printf("Maintenance Cost : LKR %s.\n", fmt_lkr(b, cost));
+    }
+}
+
+
 /* ------------------------------------------------------------- a turn --- */
 
 /* Rule 3's eight steps. Steps arrive as the milestones implement them; the
@@ -485,18 +683,27 @@ void play_turn(GameState *g, int p)
 {
     int d1, d2, total;
 
+    maintenance_step(g, p);                         /* 1. upkeep (LK 27)  */
+
     total = roll_dice(&d1, &d2);                    /* 2. roll two dice   */
     printf("%s rolled %d.\n", g->players[p].name, total);
 
-    /* 1. resolve outstanding penalties. The roll happens first only because
-       Rule 13's doubles test needs it; a jailed player who stays in has
-       simply spent their turn on the attempt. */
+    /* 1. resolve outstanding penalties. Also step 1, and it lands after the
+       roll only because Rule 13's doubles test needs the dice. Maintenance
+       above needs none, so it keeps its place at the head of the turn --
+       and a player who stays in Jail has still had their upkeep, which is
+       right: LK 27 ties maintenance to the turn, not to the movement. */
     if (!resolve_jail(g, p, d1, d2)) {
         return;
     }
 
     move_player(g, p, total);                       /* 3. move clockwise  */
     land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
+    build_step(g, p);                               /* 6. construction    */
+
+#ifdef DEBUG
+    assert_invariants(g);
+#endif
 }
 
 /* One round is one turn for every solvent player, in order[] sequence --
@@ -517,7 +724,14 @@ void play_round(GameState *g)
     }
 
     /* D13 puts these last and in this order. The economic cadences slot in
-       above them as the milestones introduce them. */
+       between the tick and the summary as the milestones introduce them.
+
+       Interest before the default check is the one ordering that matters:
+       LK 4 compounds first, so a loan defaults on the round its balance
+       finally outgrows its term rather than a round later. */
+    accrue_interest(g);             /* LK 4, D4                            */
+    check_loan_default(g);          /* LK 6-7                              */
+    condition_tick(g);              /* LK 25: buildings age by the round   */
     round_summary(g);
     market_conditions(g);
 }

@@ -500,6 +500,53 @@ int count_owned(const GameState *g, int p, SquareType type)
     return n;
 }
 
+/* Rule 8: p holds every square of the colour group, which is the only thing
+ * that permits construction.
+ *
+ * GRP_NONE is false rather than an error. Railways, utilities and the special
+ * squares all carry it, so a caller sweeping the board asks this question of
+ * them too and must get a plain "no" -- Rule 8 is about colour groups, and
+ * owning all four railways is not a monopoly for building purposes.
+ */
+bool group_monopoly(const GameState *g, int p, PropertyGroup grp)
+{
+    int i, members = 0;
+
+    if (grp == GRP_NONE) {
+        return false;
+    }
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group != grp) {
+            continue;
+        }
+        if (g->board[i].owner != p) {
+            return false;
+        }
+        members++;
+    }
+
+    return members > 0;
+}
+
+/* How far a square is developed, on one scale: 0-4 houses, or MAX_HOUSES + 1
+ * for a hotel.
+ *
+ * Rule 10 makes a hotel a replacement for four houses rather than a fifth
+ * one, so board state stores them in separate fields -- which leaves a hotel
+ * reading houses == 0, indistinguishable from an empty lot by that field
+ * alone. Every caller that ranks development therefore asks this instead:
+ * the builder picking the least-developed square in a group, and the Rule 9
+ * evenness check. Without it the builder would see a fresh hotel as the
+ * emptiest property in its group and immediately start it over with houses.
+ */
+int development_level(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    return s->hotel ? MAX_HOUSES + 1 : s->houses;
+}
+
 /* ------------------------------------------------------- choke points -- */
 /*
  * Every modifier in the game is read in one of the four functions below, and
@@ -541,6 +588,86 @@ int mortgage_value(const GameState *g, int sq)
     return apply_pct(s->mortgageValue, effect_modifier(g, EFF_MORTGAGE_MUL, sq, s->owner));
 }
 
+/* D18: construction cost comes from the GROUP table in Appendix B, so every
+ * property in a colour group builds at the same price regardless of what its
+ * individual purchase price is.
+ *
+ * The fourth choke point, and it earns the name several times over: house and
+ * hotel prices are read by the builder, by LK 27's maintenance charge (a
+ * percentage of them), by D1's repair cost, by the D11 ladder's 50% sale
+ * price, and by net worth's building book value. The Housing Subsidy
+ * regulation and the Fuel Crisis both move construction costs, and they move
+ * all five of those readings by moving this one function.
+ */
+int building_cost(const GameState *g, int sq, bool hotel)
+{
+    const Square *s    = &g->board[sq];
+    int           cost = hotel ? s->hotelCost : s->houseCost;
+
+    return apply_pct(cost, effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner));
+}
+
+/* LK 27: the cost of restoring one property to 100% condition -- 5% of
+ * construction cost per house, 8% for a hotel.
+ *
+ * Reading building_cost rather than the stored field is what makes
+ * maintenance track inflation and the Housing Subsidy regulation without a
+ * line of its own: the upkeep of a building is a fixed fraction of what that
+ * building currently costs to put up.
+ */
+int maintenance_cost(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    if (s->hotel) {
+        return pct_of(building_cost(g, sq, true), MAINT_HOTEL_PCT);
+    }
+    return pct_of(building_cost(g, sq, false) * s->houses, MAINT_HOUSE_PCT);
+}
+
+/* Table 3 as a band lookup rather than a formula. The spec gives five bands
+ * with hard edges, not a curve, and 89% collecting the same 90% as 75% is
+ * the rule rather than an approximation of one.
+ *
+ * The bottom band is LK 26's Closed: below 25% the building collects nothing
+ * at all, which is why this returns 0 rather than some small percentage.
+ */
+static int condition_rent_pct(int conditionPct)
+{
+    if (conditionPct >= 90) { return 100; }
+    if (conditionPct >= 75) { return  90; }
+    if (conditionPct >= 50) { return  75; }
+    if (conditionPct >= 25) { return  50; }
+    return 0;                                   /* LK 26: Closed            */
+}
+
+/* LK 25, called at the end of every round. Buildings decay; land does not.
+ *
+ * The guard is what makes the rule sensible: an undeveloped property has no
+ * building to fall into disrepair, so it neither loses condition nor counts
+ * unmaintained rounds towards LK 28's structural damage. Decaying every
+ * square would quietly close half the board's undeveloped properties by
+ * round 40, none of which the rules ever intended.
+ */
+void condition_tick(GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        Square *s = &g->board[i];
+
+        if (development_level(g, i) == 0) {
+            continue;
+        }
+
+        s->conditionPct -= COND_DECAY_PCT;
+        if (s->conditionPct < 0) {
+            s->conditionPct = 0;
+        }
+        s->unmaintainedRounds++;
+    }
+}
+
 /* Rule 7 and Tables 6-8. Returns what the visitor owes the owner.
  *
  * Zero in three cases: nobody owns it, it is mortgaged (Rule 7 says a
@@ -568,6 +695,15 @@ int square_rent(const GameState *g, int sq, int diceTotal)
             rent = apply_pct(rent, effect_modifier(g, EFF_HOTEL_RENT_MUL, sq, s->owner));
         } else {
             rent = s->baseRent * RENT_MULT[s->houses];
+        }
+        /* LK 25-26, and only where there is something to be in disrepair.
+           An undeveloped property collects its full base rent forever: the
+           condition percentage describes buildings, and a vacant lot has
+           none. Applied before the market multipliers because a boom lifts
+           what the property actually earns, not what it would earn if it
+           were maintained. */
+        if (development_level(g, sq) > 0) {
+            rent = pct_of(rent, condition_rent_pct(s->conditionPct));
         }
         return apply_pct(rent, effect_modifier(g, EFF_RENT_MUL, sq, s->owner));
 

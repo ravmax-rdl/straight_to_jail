@@ -593,18 +593,29 @@ temporarily, confirm the block, then revert.
 
 ### 3.1 Monopolies, houses, hotels
 
-- [ ] **Step 1:** `group_monopoly(g, p, grp)` — true when every square of that group is owned by `p`. False for
+- [x] **Step 1:** `group_monopoly(g, p, grp)` — true when every square of that group is owned by `p`. False for
       `GRP_NONE`.
-- [ ] **Step 2:** `building_cost(g, sq, hotel)` — stored group cost, then `EFF_BUILD_COST_MUL`. The third choke point.
-- [ ] **Step 3:** Placeholder `decide_build` — for each monopolised group, build one house on the property with the
+- [x] **Step 2:** `building_cost(g, sq, hotel)` — stored group cost, then `EFF_BUILD_COST_MUL`. The third choke point.
+- [x] **Step 3:** Placeholder `decide_build` — for each monopolised group, build one house on the property with the
       fewest houses, while affordable. That single rule enforces Rule 9's even-building requirement automatically.
       Refuse on mortgaged squares, cap at `MAX_HOUSES`, new buildings start at `conditionPct = 100`.
-- [ ] **Step 4:** Extend `decide_build` — once every property in a group has 4 houses, upgrade to hotels. A hotel
+- [x] **Step 4:** Extend `decide_build` — once every property in a group has 4 houses, upgrade to hotels. A hotel
       **replaces** the four houses: `houses = 0`, `hotel = true`. Never both (Rule 10).
-- [ ] **Step 5:** Extend `square_rent` — `hotel` uses `HOTEL_RENT_MULT` and `EFF_HOTEL_RENT_MUL`.
-- [ ] **Step 6:** Extend `round_summary`'s `Hotels` count. Wire `decide_build` into `play_turn` as Rule 3 step 6.
-- [ ] **Step 7:** `#ifdef DEBUG` invariants: within any group `max(houses) - min(houses) <= 1`, and
+- [x] **Step 5:** Extend `square_rent` — `hotel` uses `HOTEL_RENT_MULT` and `EFF_HOTEL_RENT_MUL`.
+- [x] **Step 6:** Extend `round_summary`'s `Hotels` count. Wire `decide_build` into `play_turn` as Rule 3 step 6.
+- [x] **Step 7:** `#ifdef DEBUG` invariants: within any group `max(houses) - min(houses) <= 1`, and
       `!(houses > 0 && hotel)` on every square.
+
+> **Deviation, and why.** The evenness bound cannot be a board invariant. Foreclosure (step 19) demolishes the buildings
+> on a loan's pledged squares and leaves their groupmates untouched, so LK 6 itself produces a group standing at 0 and 4;
+> a player who buys the stripped square back at auction re-assembles a monopoly that is legitimately five levels apart,
+> and the builder needs several turns to level it up again. Asserted over board state, this aborted on six of the seven
+> seeds tried. The wording is also incompatible with hotels on its own terms — a hotel stores `houses == 0`, so a group
+> holding one hotel and two four-house properties reads max 4, min 0 and fails an invariant it satisfies.
+>
+> What Rule 9 actually guarantees is that no building is ever *added* to a square standing above its group's minimum.
+> That is checked at the moment of the choice, on `development_level` rather than `houses`, and it holds on every seed.
+> The `!(houses > 0 && hotel)` half is a genuine state invariant and stays where the plan put it.
 
 ```
 Aggressive Investor constructed one house on Galle Fort.
@@ -618,24 +629,24 @@ Aggressive Investor upgraded Galle Fort to a Hotel.
 
 ### 3.2 Condition and maintenance
 
-- [ ] **Step 8:** `condition_tick(g)` — at the end of every round, `conditionPct -= COND_DECAY_PCT` on every square
+- [x] **Step 8:** `condition_tick(g)` — at the end of every round, `conditionPct -= COND_DECAY_PCT` on every square
       carrying buildings, floored at 0, and `unmaintainedRounds++` on those squares.
-- [ ] **Step 9:** `condition_rent_pct(c)` — Table 3 as a band lookup: ≥90 → 100, ≥75 → 90, ≥50 → 75, ≥25 → 50,
+- [x] **Step 9:** `condition_rent_pct(c)` — Table 3 as a band lookup: ≥90 → 100, ≥75 → 90, ≥50 → 75, ≥25 → 50,
       else 0 (Closed, LK 26).
-- [ ] **Step 10:** Apply it inside `square_rent`, **only when the square carries buildings**. An undeveloped property
+- [x] **Step 10:** Apply it inside `square_rent`, **only when the square carries buildings**. An undeveloped property
       has no condition to decay and collects full base rent.
-- [ ] **Step 11:** Placeholder `decide_maintenance` — maintain every building below 75% while affordable. Cost is 5% of
+- [x] **Step 11:** Placeholder `decide_maintenance` — maintain every building below 75% while affordable. Cost is 5% of
       construction cost per house, 8% per hotel (LK 27); restores `conditionPct = 100` and `unmaintainedRounds = 0`.
-- [ ] **Step 12:** Wire `decide_maintenance` into `play_turn` as **Rule 3 step 1 only**. LK 27 permits maintenance
+- [x] **Step 12:** Wire `decide_maintenance` into `play_turn` as **Rule 3 step 1 only**. LK 27 permits maintenance
       nowhere else.
 
 ### 3.3 Loans
 
-- [ ] **Step 13:** `eligible_collateral(g, p, sq)` — owned by `p`, type property/railway/utility, and **not** already
+- [x] **Step 13:** `eligible_collateral(g, p, sq)` — owned by `p`, type property/railway/utility, and **not** already
       mortgaged or loan-locked. Buildings are never collateral (LK 1).
-- [ ] **Step 14:** `max_loan(g, p)` — 75% of the summed `mortgage_value` of all eligible collateral (LK 2, **D5**).
+- [x] **Step 14:** `max_loan(g, p)` — 75% of the summed `mortgage_value` of all eligible collateral (LK 2, **D5**).
       Returns 0 if the player already has an active loan (LK 5 permits one at a time).
-- [ ] **Step 15:** `grant_loan(g, p, amount)` — credit the cash; set `loan.active`, `loan.principal = amount`,
+- [x] **Step 15:** `grant_loan(g, p, amount)` — credit the cash; set `loan.active`, `loan.principal = amount`,
       `loan.ratePct = econ.interestRatePct` (**frozen for life**, LK 13), `loan.issuedRound = g->round`,
       `loan.termRounds = LOAN_ROUNDS`. Pledge the **minimum** set of assets, highest `mortgage_value` first, whose 75%
       LTV covers the amount (**D22**); mark those `loanLocked = true`. Loan-locked assets still earn rent and may still
@@ -651,13 +662,13 @@ Interest Rate : 8%
 Duration : 20 Rounds
 ```
 
-- [ ] **Step 16:** `accrue_interest(g)` — at the end of every round, for each active loan
+- [x] **Step 16:** `accrue_interest(g)` — at the end of every round, for each active loan
       `principal = apply_pct(principal, loan.ratePct)` at the **issued** rate (**D4**, **D6′**).
 
 > **D4** takes LK 4 literally: the Table 9 figure applies per round despite being labelled annual. At 8% that is ×4.66
 > over a 20-round loan; at 15% it is ×16.4. That is intended, and it is what makes default a live threat.
 
-- [ ] **Step 17:** `repay_loan(g, p, amount)` — charge, reduce the principal; on full settlement clear `loan.active` and
+- [x] **Step 17:** `repay_loan(g, p, amount)` — charge, reduce the principal; on full settlement clear `loan.active` and
       unlock every `loanLocked` square owned by that player.
 
 ```
@@ -666,14 +677,14 @@ Outstanding Balance :
 LKR 11,200.
 ```
 
-- [ ] **Step 18:** `decide_bank` (placeholder) covering the full LK 5 action set — obtain, repay part, repay in full,
+- [x] **Step 18:** `decide_bank` (placeholder) covering the full LK 5 action set — obtain, repay part, repay in full,
       extend the period (`termRounds += LOAN_ROUNDS`), increase the amount (top up to `max_loan`, re-freezing the rate
       on the combined balance). **Exactly one action per landing**: return after the first. Wire `SQ_BANK` to it.
 
 > **R1.8**: this is the only route to repayment. A player who never lands on square 38 within their term defaults.
 > That is the clarified rule, not a bug.
 
-- [ ] **Step 19:** `check_loan_default(g)` — immediately after `accrue_interest`, so a loan can default on the interest
+- [x] **Step 19:** `check_loan_default(g)` — immediately after `accrue_interest`, so a loan can default on the interest
       that just compounded. When `g->round >= loan.issuedRound + loan.termRounds` with principal outstanding: transfer
       every `loanLocked` square owned by that player to the Bank, demolish their buildings, cancel those squares'
       policies, clear the debt, deactivate the loan (LK 6). Send the foreclosed squares to `run_auction` (LK 19). If the
@@ -685,23 +696,23 @@ Collateral has been foreclosed.
 Outstanding debt cleared.
 ```
 
-- [ ] **Step 20:** Extend `net_worth` to subtract `loan.principal`, and `round_summary`'s `Outstanding Loan` to print
+- [x] **Step 20:** Extend `net_worth` to subtract `loan.principal`, and `round_summary`'s `Outstanding Loan` to print
       the principal or `None`.
-- [ ] **Step 21:** `#ifdef DEBUG` guards: principal never exceeds `INT_MAX / 2`; no square is `loanLocked` while its
+- [x] **Step 21:** `#ifdef DEBUG` guards: principal never exceeds `INT_MAX / 2`; no square is `loanLocked` while its
       owner has no active loan.
 
 ### 3.4 Debt recovery and bankruptcy
 
-- [ ] **Step 22:** `raise_funds(g, p, needed)` — the **D11** ladder, in this exact order:
+- [x] **Step 22:** `raise_funds(g, p, needed)` — the **D11** ladder, in this exact order:
   1. Sell buildings back to the Bank at 50% of construction cost.
   2. Mortgage unmortgaged, non-loan-locked assets at `mortgage_value`.
   3. Still short → return false.
 
   **Repaying or refinancing a loan is not a rung** — LK 5 and the clarification confine that to the Bank square.
 
-- [ ] **Step 23:** Rewire `charge` — when `cash < amt`, call `raise_funds` first; only if that fails does the player go
+- [x] **Step 23:** Rewire `charge` — when `cash < amt`, call `raise_funds` first; only if that fails does the player go
       bankrupt. This makes `charge` the single place insolvency is ever detected.
-- [ ] **Step 24:** `declare_bankrupt(g, p, creditor)` per Rule 14 — remove all buildings, cancel all policies, make the
+- [x] **Step 24:** `declare_bankrupt(g, p, creditor)` per Rule 14 — remove all buildings, cancel all policies, make the
       loan immediately due, transfer remaining cash to the creditor (or the Bank), set `bankrupt = true`, and send every
       owned square to auction (LK 19).
 
@@ -710,10 +721,20 @@ Risk Taker has been declared bankrupt.
 Remaining assets transferred to the Bank.
 ```
 
-- [ ] **Step 25:** Complete `net_worth` per Rule 15 — cash + property + buildings + railway + utility + claims
+- [x] **Step 25:** Complete `net_worth` per Rule 15 — cash + property + buildings + railway + utility + claims
       receivable − loans − accrued interest − taxes due. Building value is book value at construction cost. Claims
       receivable is always 0 (**D15**).
-- [ ] **Step 26:** Confirm `game_over` and `final_report` handle the last-solvent-player ending and that `play_round`
+
+> **Deviation, and why.** Mortgage advances are subtracted too, recorded as **D28**. Rule 15's "− loans" names the
+> LK 1–7 advance and says nothing about mortgages, but leaving them out makes mortgaging *raise* a player's net worth:
+> the cash lands and the square is still carried at full market value. Seed 42 produced a player showing LKR 65,879 with
+> nine of ten properties mortgaged and the tenth pledged. Accrued interest needs no term of its own — LK 4 compounds it
+> into the principal, so subtracting the principal subtracts it.
+>
+> Two further blocks have no §5 template and match the voice of their neighbours, as the jail lines did in milestone 2:
+> maintenance (`%s maintained %s.` / `Maintenance Cost : LKR N.`, shaped after the construction block) and LK 5's extend
+> and increase actions (shaped after the loan block).
+- [x] **Step 26:** Confirm `game_over` and `final_report` handle the last-solvent-player ending and that `play_round`
       skips bankrupt players.
 
 **Verify:**

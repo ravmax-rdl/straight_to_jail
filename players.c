@@ -48,3 +48,174 @@ int decide_bid(GameState *g, int p, int sq, int minBid)
     }
     return minBid;
 }
+
+/* Rule 8 plus the consequence Rule 9 has for a mortgaged member.
+ *
+ * A mortgaged square cannot be built on, and building on its groupmates would
+ * push them further and further ahead of it -- so the whole group is barred
+ * until the mortgage is lifted. Allowing the rest to build would break the
+ * evenness requirement rather than satisfy it.
+ */
+static bool group_developable(const GameState *g, int p, PropertyGroup grp)
+{
+    int i;
+
+    if (!group_monopoly(g, p, grp)) {
+        return false;
+    }
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && g->board[i].mortgaged) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* PLACEHOLDER (milestone 6). Rule 3 step 6: which square to build on, or -1
+ * to build nothing. The caller decides house or hotel from the square's
+ * current level and executes; this function only chooses.
+ *
+ * Always the LEAST developed square across every monopolised group. That one
+ * rule delivers Rule 9's even building for free: a square can only ever be
+ * one level ahead of its groupmates, because the moment it is, one of them
+ * becomes the minimum and takes the next building. No explicit evenness check
+ * is needed anywhere, and the DEBUG invariant in game.c confirms it holds.
+ *
+ * A square already at MAX_HOUSES is the minimum only once every other member
+ * has four too, which is exactly Rule 10's precondition for a hotel -- so the
+ * upgrade falls out of the same comparison rather than needing its own pass.
+ *
+ * Affordability is checked here rather than left to charge(): building is
+ * voluntary, and a player who would have to sell buildings to fund a building
+ * should simply not build. See build_step in game.c.
+ */
+int decide_build(GameState *g, int p)
+{
+    int i, best = -1, bestLevel = MAX_HOUSES + 1;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+        int           level;
+
+        if (s->type != SQ_PROPERTY || s->owner != p) {
+            continue;
+        }
+        if (!group_developable(g, p, s->group)) {
+            continue;
+        }
+
+        level = development_level(g, i);
+        if (level > MAX_HOUSES || level >= bestLevel) {
+            continue;               /* already a hotel, or not the emptiest  */
+        }
+        if (g->players[p].cash < building_cost(g, i, level == MAX_HOUSES)) {
+            continue;
+        }
+
+        best      = i;
+        bestLevel = level;
+    }
+
+    return best;
+}
+
+/* Table 3's second band edge. Above it a building still collects 90% or
+   100% of its rent; at 74% the factor drops to 75%, which is the first cut
+   worth paying to avoid. */
+#define MAINTAIN_BELOW_PCT 75
+
+/* PLACEHOLDER (milestone 6). Rule 3 step 1 and LK 27: which building to
+ * restore to full condition, or -1 for none. One square per call; game.c
+ * repeats until this stops offering, which is how LK 27's "any number of
+ * buildings if affordable" is expressed without this function executing
+ * anything.
+ *
+ * Maintaining at 75% rather than on the way down from 100 is the cheap
+ * reading of Table 3: condition falls 2% a round, so a property serviced at
+ * the band edge collects full rent for the seven rounds it takes to slip
+ * back, and pays once for them. Servicing at 99% would pay the same price
+ * for one round of benefit.
+ */
+int decide_maintenance(GameState *g, int p)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+
+        if (s->owner != p || development_level(g, i) == 0) {
+            continue;
+        }
+        if (s->conditionPct >= MAINTAIN_BELOW_PCT) {
+            continue;
+        }
+        if (g->players[p].cash < maintenance_cost(g, i)) {
+            continue;
+        }
+        return i;
+    }
+
+    return -1;
+}
+
+/* How close to maturity a loan must be before the placeholder buys time
+   rather than hoping for another Bank landing. */
+#define EXTEND_WITHIN_ROUNDS 5
+
+/* PLACEHOLDER (milestone 6). R1.8 and LK 5: the Bank square offers five
+ * actions and grants exactly one per landing, so this returns the first that
+ * applies and the order below IS the policy.
+ *
+ * Settle before part-paying, part-pay before buying time, buy time before
+ * borrowing more. That ranking is not arbitrary: under D4 the principal
+ * compounds every round at the rate it was issued at, and R1.8 makes this
+ * square the only place it can ever be paid down. A player who passes up a
+ * chance to reduce the balance may not get another for twenty rounds, by
+ * which time 8% per round has multiplied it by four and a half.
+ *
+ * Borrowing is deliberately reactive -- only when cash has fallen below half
+ * the starting stake, and only for the shortfall rather than the maximum.
+ * Taking the LK 2 ceiling on principle is the Risk Taker's move and belongs
+ * in milestone 6; here it would simply bankrupt all four players the same
+ * way at the same time and hide everything else this milestone added.
+ */
+BankAction decide_bank(GameState *g, int p, int *amount)
+{
+    const Player *pl = &g->players[p];
+    int           capacity;
+
+    *amount = 0;
+
+    if (pl->loan.active) {
+        if (pl->cash >= pl->loan.principal) {
+            *amount = pl->loan.principal;
+            return BANK_REPAY_FULL;
+        }
+        if (pl->cash >= pl->loan.principal / 2 && pl->loan.principal > 1) {
+            *amount = pl->loan.principal / 2;
+            return BANK_REPAY_PART;
+        }
+        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+            return BANK_EXTEND;
+        }
+
+        capacity = loan_capacity(g, p);
+        if (capacity > 0 && pl->cash < START_CASH / 4) {
+            *amount = capacity;
+            return BANK_INCREASE;
+        }
+        return BANK_NONE;
+    }
+
+    if (pl->cash < START_CASH / 2) {
+        int shortfall = START_CASH - pl->cash;
+        int cap       = max_loan(g, p);
+
+        if (cap > 0) {
+            *amount = (shortfall < cap) ? shortfall : cap;
+            return BANK_OBTAIN;
+        }
+    }
+
+    return BANK_NONE;
+}

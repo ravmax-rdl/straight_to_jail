@@ -87,7 +87,7 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R1.5** Each square tracks: individual price, individual base rent, group mortgage value, house/hotel cost, owner, `purchasedRound`, mortgage status, loan-lock status, insurance policy + remaining rounds, building count, hotel flag, depreciation, condition, unmaintained-round count, damaged and structurally-damaged flags. **Age is derived, not stored** — it is `round − purchasedRound` (**D19**), so it cannot disagree with ownership.
 - [ ] **R1.6** 4 railways: price **1,500**, mortgage value **750**; rent 250/500/1,000/2,000 by count owned by one player (Table 2/7); mortgageable; never developable or insurable.
 - [ ] **R1.7** 2 utilities: price **1,500**, mortgage value **750**; rent = 4× dice (one owned) or 10× dice (both) (Table 8); mortgageable; never developable.
-- [ ] **R1.8** Bank of Ceylon square: exactly **one** loan action per landing — obtain / repay part / repay full / extend / increase (§1.1.4, Rule-LK 5). **A loan can be repaid only by landing here**; there is no other route (clarification, decision **D19**).
+- [x] **R1.8** Bank of Ceylon square: exactly **one** loan action per landing — obtain / repay part / repay full / extend / increase (§1.1.4, Rule-LK 5). **A loan can be repaid only by landing here**; there is no other route (clarification, decision **D19**).
 - [ ] **R1.9** 2 insurance squares; landing allows purchase or renewal of one policy tier for one property (§1.2).
 
 ## R2 — Traditional rules (Rules 1–15)
@@ -99,25 +99,25 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R2.5** Pass or land on GO → +LKR 2,000 (Rule 4).
 - [x] **R2.6** Unowned purchasable square: buy at its individual list price, or it goes **immediately** to auction (Rule 5).
 - [x] **R2.7** Rent owed on owned, unmortgaged property; mortgaged collects nothing (Rule 7). Landing on one's own property charges nothing.
-- [ ] **R2.8** Full colour group = monopoly = only then may build (Rule 8).
-- [ ] **R2.9** Even building across group; ≤4 houses; hotel replaces exactly 4 houses; never houses + hotel together (Rules 9–10).
+- [x] **R2.8** Full colour group = monopoly = only then may build (Rule 8).
+- [x] **R2.9** Even building across group; ≤4 houses; hotel replaces exactly 4 houses; never houses + hotel together (Rules 9–10).
 - [x] **R2.10** Rent multipliers on base rent (Table 6): 1×/2×/3×/5×/7× for 0–4 houses; 10× hotel.
-- [ ] **R2.11** Income Tax (square 4) = **15% of the player's current cash** (decision **D2′**), payable immediately; shortfall → debt recovery (Rule 11, decision **D11**). The rate is inflation-adjusted and scaled by the *Increase Property Tax* regulation.
-- [ ] **R2.12** Community Development Fund (square 2) = **10% of total assets** — the current market value of owned properties only, buildings excluded (decision **D16**) — payable immediately, same shortfall handling. Because the base is read through `square_value`, the levy tracks market fluctuations automatically.
+- [x] **R2.11** Income Tax (square 4) = **15% of the player's current cash** (decision **D2′**), payable immediately; shortfall → debt recovery (Rule 11, decision **D11**). The rate is inflation-adjusted and scaled by the *Increase Property Tax* regulation.
+- [x] **R2.12** Community Development Fund (square 2) = **10% of total assets** — the current market value of owned properties only, buildings excluded (decision **D16**) — payable immediately, same shortfall handling. Because the base is read through `square_value`, the levy tracks market fluctuations automatically.
 - [x] **R2.13** Go To Jail → straight to square 10, no GO money (Rule 12).
 - [x] **R2.14** Jail exit: pay LKR 300 bail, roll doubles, or wait 3 turns (Rule 13; after the 3rd turn see **D10**).
-- [ ] **R2.15** Bankruptcy when liabilities exceed assets: buildings removed, policies expire, loans due, assets transferred (Rule 14, **D11**).
-- [ ] **R2.16** Game ends when one solvent player remains or after 500 rounds; then highest net worth wins (Rule 15).
-- [ ] **R2.17** Net worth = cash + property + buildings + railway + utility + claims receivable − loans − accrued interest − taxes due (Rule 15; receivable is always 0 per **D15**).
+- [x] **R2.15** Bankruptcy when liabilities exceed assets: buildings removed, policies expire, loans due, assets transferred (Rule 14, **D11**).
+- [x] **R2.16** Game ends when one solvent player remains or after 500 rounds; then highest net worth wins (Rule 15).
+- [x] **R2.17** Net worth = cash + property + buildings + railway + utility + claims receivable − loans − accrued interest − taxes due (Rule 15; receivable is always 0 per **D15**).
 
 ## R3 — MONOPOLY-LK extensions
 
 **Loans (Rule-LK 1–7)**
-- [ ] **R3.1** Collateral = properties, railways, utilities only — never buildings (LK 1).
-- [ ] **R3.2** Max loan = 75% of total mortgage value of eligible (unmortgaged, not loan-locked) collateral (LK 2, decision **D5**). Mortgage value is the fixed group figure of R1.4, adjusted only by active `MORTGAGE_MUL` effects.
-- [ ] **R3.3** Loan credits cash instantly. Only the **minimum** set of assets needed to cover the amount at 75% LTV is pledged (decision **D22**). Pledged assets become *loan-locked*: no sale/trade/auction/re-mortgage, but they still earn rent and may be developed (LK 3).
-- [ ] **R3.4** Duration 20 rounds from the round of issue. Every round `principal += principal × rate / 100` at the loan's **issued** rate (LK 4, decisions **D4**, **D19**, **D21**).
-- [ ] **R3.5** Default → foreclosure: pledged assets to Bank, buildings demolished, their policies cancelled, debt cleared; player continues, or is bankrupt if nothing remains (LK 6–7). Foreclosed assets go to auction (LK 19).
+- [x] **R3.1** Collateral = properties, railways, utilities only — never buildings (LK 1).
+- [x] **R3.2** Max loan = 75% of total mortgage value of eligible (unmortgaged, not loan-locked) collateral (LK 2, decision **D5**). Mortgage value is the fixed group figure of R1.4, adjusted only by active `MORTGAGE_MUL` effects.
+- [x] **R3.3** Loan credits cash instantly. Only the **minimum** set of assets needed to cover the amount at 75% LTV is pledged (decision **D22**). Pledged assets become *loan-locked*: no sale/trade/auction/re-mortgage, but they still earn rent and may be developed (LK 3).
+- [x] **R3.4** Duration 20 rounds from the round of issue. Every round `principal += principal × rate / 100` at the loan's **issued** rate (LK 4, decisions **D4**, **D19**, **D21**).
+- [x] **R3.5** Default → foreclosure: pledged assets to Bank, buildings demolished, their policies cancelled, debt cleared; player continues, or is bankrupt if nothing remains (LK 6–7). Foreclosed assets go to auction (LK 19).
 
 **Insurance & disasters (Rule-LK 8–11, §1.2, App E)**
 - [ ] **R3.6** Three tiers, premiums 5% / 10% / 15% of current property value; coverage per decision **D3**. One policy per property; valid 20 rounds; reminder 3 rounds before expiry (LK 8–9).
@@ -144,8 +144,8 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R3.17** Every 20 rounds one of the 8 regulations is selected: Increase Property Tax (+50% income tax), Reduce Loan Interest (−2%), Housing Subsidy (−30% house cost), Luxury Property Tax (25% of developed hotel-property value, charged **once on activation** per **D24**), Railway Modernization (+25% railway rent), Electricity Tariff Revision (+20% utility rent), Insurance Regulation (−15% premiums, coverage unchanged), Anti-Speculation Act (≤3 undeveloped properties per **D25**).
 
 **Building condition & maintenance (Rule-LK 25–29)**
-- [ ] **R3.18** Every building starts at 100% condition, −2% at the end of every round; rent factor by condition band (Table 3): 90–100→100%, 75–89→90%, 50–74→75%, 25–49→50%, <25→closed (no rent).
-- [ ] **R3.19** Maintenance only at the start of the owner's turn: house 5% / hotel 8% of construction cost, restores 100%, any number of buildings if affordable.
+- [x] **R3.18** Every building starts at 100% condition, −2% at the end of every round; rent factor by condition band (Table 3): 90–100→100%, 75–89→90%, 50–74→75%, 25–49→50%, <25→closed (no rent).
+- [x] **R3.19** Maintenance only at the start of the owner's turn: house 5% / hotel 8% of construction cost, restores 100%, any number of buildings if affordable.
 - [ ] **R3.20** Maintenance ignored >20 consecutive rounds → structural damage: property value −15%, max rent −25%, future maintenance +50% (LK 28). Renovating a structurally damaged building costs 25% of replacement value and restores value, rent and condition (LK 29).
 
 **Dynamic property market (Rule-LK 30–34)**
@@ -221,6 +221,7 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 | **D25** | Anti-Speculation Act's second clause | Enforcing "at most three undeveloped properties" strictly makes "additional purchases require development within five rounds" unreachable — the additional purchase can never occur. Implemented as the cap alone, with the reasoning in a comment |
 | **D26** | §5 blank lines | Blocks are emitted **compact**. Settled by extraction, not inference: `pdftotext -layout` over §5 renders the entire `Round N Summary` block — 30 lines, all four players — with **no blank line between any field**, and gives the rule widths as exactly 45 (`=` and `-`) and 41 for the market block. The market block is the one with real internal blanks: one after the header rule, one between each labelled section, none within a section. Its underlines are literal, not derived — 13, 16, 23, 12, 23 against labels of 11, 14, 20, 9, 21. **Known contradiction:** the `GAME OVER` block straddles a page break, and its first half (through `Total Property Value`) extracts tight while its second half extracts blank-separated. The document is inconsistent with itself there. We follow the tight half, matching the round summary and the unbroken run; flagged for the M6 audit as the single block where §5 cannot arbitrate |
 | **D27** | Where `Rent.csv` lives and what happens when it does not | **Searched, then fatal.** `board_init` tries `assets/Rent.csv`, then `Rent.csv`, then `../assets/Rent.csv`, so the program runs whether it is launched from the repository root or from the source directory. `argv[2]` overrides the search with an explicit path, and an explicit path is never second-guessed — failing to open the file the caller named is the error worth reporting. If nothing opens, or the data is malformed, `main` prints a diagnostic **to stderr** and returns 1 **before any stdout output**, so a failed run never emits a partial pre-game block and never pollutes the graded stdout stream (**R5.7**). There is deliberately **no fallback table**: a compiled-in copy would be a second source of truth, free to drift silently out of step with the file. Validation is total — every row must have 4 fields, a property name that exists on the board, a group matching the board's, a strictly positive integer price and base rent, and no duplicates; and all 22 property squares must be covered when the file closes. Both LF and CRLF line endings are accepted, since `.gitattributes` normalises on checkout while the supplied file is CRLF |
+| **D28** | Whether a mortgage is a liability in Rule 15's net worth | **It is.** Rule 15 lists `cash + property + buildings + railway + utility + claims receivable − loans − accrued interest − taxes due`; its "− loans" names the LK 1–7 advance and says nothing about mortgages. But a mortgage is the same instrument at a different desk — cash advanced against an asset the player keeps and still shows at full market value in the "property" term. Omitting it makes mortgaging **raise** a player's net worth, and a balance sheet in which borrowing improves your position is arithmetically wrong before it is unfaithful to anything. Seed 42 produced a player reporting LKR 65,879 with nine of ten properties mortgaged and the tenth pledged to a loan. The amount subtracted is the current `mortgage_value`, i.e. what redemption would cost, not what was advanced. **Accrued interest** needs no term of its own: LK 4 compounds it into the principal each round (**D4**), so subtracting `loan.principal` subtracts every rupee of interest with it. **Taxes due** is structurally zero — both tax squares charge on the spot — but is subtracted rather than assumed, since a milestone-4 regulation may defer one. This decision governs `net_worth` alone: **D16**'s Community Development Fund base is a separate, already-settled reading and still levies on unencumbered market value |
 
 ---
 
