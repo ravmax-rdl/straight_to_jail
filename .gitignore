@@ -10,3 +10,5 @@ a.out
 # Scratch output from the verification cycle
 run*.txt
 spec.txt
+debug
+debug.exe

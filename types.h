@@ -299,6 +299,24 @@ int         pct_of(int value, int percent);
 const char *fmt_lkr(char *buf, int amount);
 int         net_worth(const GameState *g, int p);
 
+/* finance.c -- money movement. These two are the only functions in the
+   program that assign to Player.cash. charge returns false, having moved
+   nothing, when the player cannot cover the amount; the D11 recovery ladder
+   replaces that in milestone 3. */
+void credit(GameState *g, int p, int amt);
+bool charge(GameState *g, int p, int amt, int toPlayer);
+
+/* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
+   assets), so deliberately two functions rather than one parameterised. */
+int  total_assets(const GameState *g, int p);
+
+/* finance.c -- auctions (LK 19-23, D23). anchorPlayer is whoever's turn
+   triggered it; bidding starts with the player after them. */
+int  auction_opening(const GameState *g, int sq);
+void run_auction(GameState *g, int sq, int anchorPlayer);
+void pay_income_tax(GameState *g, int p);
+void pay_community_fund(GameState *g, int p);
+
 /* board.c -- randomness. Seeded once in main; every random draw in the
    program goes through rng_range so the bias fix applies everywhere. */
 int rng_range(int lo, int hi);
@@ -312,6 +330,29 @@ int roll_dice(int *d1, int *d2);
 bool board_init(GameState *g, const char *csvPath);
 void move_player(GameState *g, int p, int steps);
 
+/* board.c -- ownership queries. */
+bool is_purchasable(const GameState *g, int sq);
+int  count_owned(const GameState *g, int p, SquareType type);
+
+/* board.c -- the choke points. Every timed modifier in the game is read in
+   one of these four and nowhere else. square_value is built on the
+   individual Rent.csv price; mortgage_value on the Appendix B group figure
+   (D18), which is why they are separate functions. */
+int square_value(const GameState *g, int sq);
+int mortgage_value(const GameState *g, int sq);
+int square_rent(const GameState *g, int sq, int diceTotal);
+
+/* events.c -- the effect registry (D12). Stubbed to 0 until milestone 4;
+   the signature is final. */
+int effect_modifier(const GameState *g, EffectKind kind, int square, int player);
+
+/* players.c -- the decision engines. Placeholder bodies until milestone 6;
+   the signatures are final, so that milestone touches players.c and no other
+   file. decide_bid returns the amount to bid or 0 to withdraw permanently;
+   minBid is the smallest legal bid right now. */
+bool decide_buy(GameState *g, int p, int sq);
+int  decide_bid(GameState *g, int p, int sq, int minBid);
+
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);
 void determine_order(GameState *g);
@@ -319,6 +360,7 @@ void play_turn(GameState *g, int p);
 void play_round(GameState *g);
 bool game_over(const GameState *g);
 void game_run(GameState *g);
+void land_on(GameState *g, int p, int sq, int diceTotal);
 void round_summary(const GameState *g);
 void market_conditions(const GameState *g);
 void final_report(const GameState *g);

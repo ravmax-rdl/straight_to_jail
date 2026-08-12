@@ -438,14 +438,14 @@ Run seeds 1, 7, 42, 99 — the first player must differ across seeds.
 
 ### 2.1 The money path and the two tax squares
 
-- [ ] **Step 1:** `credit(g, p, amt)` — add to cash. `charge(g, p, amt, toPlayer)` — if `cash >= amt`, deduct, pay
+- [x] **Step 1:** `credit(g, p, amt)` — add to cash. `charge(g, p, amt, toPlayer)` — if `cash >= amt`, deduct, pay
       `toPlayer` unless `-1` (Bank), return true; otherwise return false. The full **D11** ladder lands in milestone 3;
       until then a `false` return is reported and the charge skipped. Nothing else in the program touches `cash`.
-- [ ] **Step 2:** `effect_modifier` stub in `events.c` returning `0`, with the real signature. This lets milestone 2
+- [x] **Step 2:** `effect_modifier` stub in `events.c` returning `0`, with the real signature. This lets milestone 2
       write the choke points in their **final** shape.
-- [ ] **Step 3:** `total_assets(g, p)` (**D16**) — sum of `square_value` over the **22 coloured properties** owned by
+- [x] **Step 3:** `total_assets(g, p)` (**D16**) — sum of `square_value` over the **22 coloured properties** owned by
       `p`. Buildings, railways and utilities excluded. This is the Community Development Fund's base and nothing else's.
-- [ ] **Step 4:** The two tax squares take **different bases**, so they are two functions, not one parameterised helper:
+- [x] **Step 4:** The two tax squares take **different bases**, so they are two functions, not one parameterised helper:
   - `pay_income_tax` (**D2′**) — charges `pct_of(players[p].cash, rate)` where
     `rate = apply_pct(econ.incomeTaxPct, effect_modifier(EFF_TAX_MUL, ...))`.
   - `pay_community_fund` (**D16**) — charges `pct_of(total_assets(g, p), COMMUNITY_PCT)`.
@@ -456,21 +456,21 @@ Run seeds 1, 7, 42, 99 — the first player must differ across seeds.
 > A cash-based tax also gives the two squares genuinely different characters — the Fund punishes landholding, Income
 > Tax punishes hoarding, which is the Conservative Banker's whole strategy.
 
-- [ ] **Step 5:** Add `land_on` to `game.c` as a `switch` on `g->board[sq].type` with **every enum case listed
+- [x] **Step 5:** Add `land_on` to `game.c` as a `switch` on `g->board[sq].type` with **every enum case listed
       explicitly** and no `default:`, so adding a `SquareType` later produces a warning rather than silence. Implement
       `SQ_TAX` and `SQ_COMMUNITY`; leave the rest as empty cases. Wire it into `play_turn` as Rule 3 step 4.
 
 ### 2.2 Purchase and the choke points
 
-- [ ] **Step 6:** `is_purchasable` — true for `SQ_PROPERTY`, `SQ_RAILWAY`, `SQ_UTILITY`. `count_owned(g, p, type)`.
-- [ ] **Step 7:** Placeholder `decide_buy` in `players.c` — `return cash >= square_value(g, sq);` for every strategy.
+- [x] **Step 6:** `is_purchasable` — true for `SQ_PROPERTY`, `SQ_RAILWAY`, `SQ_UTILITY`. `count_owned(g, p, type)`.
+- [x] **Step 7:** Placeholder `decide_buy` in `players.c` — `return cash >= square_value(g, sq);` for every strategy.
       Mark it clearly: *replaced in milestone 6; signature is final, only the body changes.*
-- [ ] **Step 8:** `square_value` v1 — stored **individual** `price`, then `apply_pct` with
+- [x] **Step 8:** `square_value` v1 — stored **individual** `price`, then `apply_pct` with
       `effect_modifier(EFF_VALUE_MUL, ...)`. Depreciation and structural damage slot in at milestone 5, **inside this
       function only**.
-- [ ] **Step 9:** `mortgage_value` v1 — stored **group** `mortgageValue`, then `EFF_MORTGAGE_MUL`. Separate from
+- [x] **Step 9:** `mortgage_value` v1 — stored **group** `mortgageValue`, then `EFF_MORTGAGE_MUL`. Separate from
       `square_value` because **D18** gives them different bases.
-- [ ] **Step 10:** `square_rent` v1 for `SQ_PROPERTY` — individual `baseRent` × the Table 6 development multiplier, as a
+- [x] **Step 10:** `square_rent` v1 for `SQ_PROPERTY` — individual `baseRent` × the Table 6 development multiplier, as a
       lookup table rather than an `if` chain, then `EFF_RENT_MUL`. Returns 0 if unowned or mortgaged.
 
 ```c
@@ -478,7 +478,7 @@ static const int RENT_MULT[MAX_HOUSES + 1] = { 1, 2, 3, 5, 7 };   /* Table 6 */
 #define HOTEL_RENT_MULT 10
 ```
 
-- [ ] **Step 11:** Railway rent — by count owned **by the owner**, not the visitor, then `EFF_RAILWAY_RENT_MUL`.
+- [x] **Step 11:** Railway rent — by count owned **by the owner**, not the visitor, then `EFF_RAILWAY_RENT_MUL`.
       Utility rent — `4 × diceTotal` for one utility, `10 × diceTotal` for both, then `EFF_UTILITY_RENT_MUL`. Confirm
       `land_on` receives the live dice total from `play_turn`.
 
@@ -486,7 +486,7 @@ static const int RENT_MULT[MAX_HOUSES + 1] = { 1, 2, 3, 5, 7 };   /* Table 6 */
 static const int RAILWAY_RENT[4] = { 250, 500, 1000, 2000 };      /* Table 7 */
 ```
 
-- [ ] **Step 12:** In `land_on`, for the three purchasable types: if `owner == -1`, call `decide_buy`; on true charge
+- [x] **Step 12:** In `land_on`, for the three purchasable types: if `owner == -1`, call `decide_buy`; on true charge
       the price, set `owner = p` and `purchasedRound = g->round` (**D19**), and print the §5 block. On false, run the
       auction. If owned by another player, charge rent and print the §5 rent block. Landing on your own charges nothing.
 
@@ -500,14 +500,19 @@ Rent Paid : LKR 600.
 Owner : Aggressive Investor.
 ```
 
-- [ ] **Step 13:** Extend `net_worth` to add `square_value` for every square owned by `p`. Extend `round_summary`'s
+- [x] **Step 13:** Extend `net_worth` to add `square_value` for every square owned by `p`. Extend `round_summary`'s
       `Properties` field to `count_owned(g, p, SQ_PROPERTY)`.
 
 ### 2.3 Auctions
 
-- [ ] **Step 14:** Placeholder `decide_bid` — bid `currentBid + AUCTION_INC` while affordable and at most 60% of
+- [x] **Step 14:** Placeholder `decide_bid(g, p, sq, minBid)` — bid `minBid` while affordable and at most 60% of
       `square_value`; otherwise return 0 (withdraw).
-- [ ] **Step 15:** `run_auction(g, sq, anchorPlayer)` per LK 19–23 and **D23**:
+
+> **Deviation from the drafted signature.** The plan originally passed `currentBid`, which cannot express the opening:
+> before anyone has bid, `currentBid` is 0 and `currentBid + AUCTION_INC` is 250 rather than 50% of market value.
+> `run_auction` already knows the smallest legal bid, so it passes that. `auction_opening` is shared between the two
+> so LK 32's −25% on a declining group lands in one place.
+- [x] **Step 15:** `run_auction(g, sq, anchorPlayer)` per LK 19–23 and **D23**:
   - Opening bid = `pct_of(square_value(g, sq), AUCTION_OPEN_PCT)`, then `EFF_AUCTION_OPEN_MUL` (LK 32's −25%).
   - Participants: all solvent, non-bankrupt players — **including the one who declined the purchase**.
   - Bidding order starts with the player **immediately after `anchorPlayer`** in `order[]`, then clockwise.
@@ -515,7 +520,7 @@ Owner : Aggressive Investor.
   - Withdrawal is permanent for that auction — track with a local `bool active[NUM_PLAYERS]`.
   - Loop until one active bidder remains → they pay and take ownership, `purchasedRound = g->round`.
   - **If every player withdraws at the opening price, ownership stays with the Bank** (LK 23) and nothing is charged.
-- [ ] **Step 16:** Guard the loop: `#ifdef DEBUG` assert the body runs at most 200 times.
+- [x] **Step 16:** Guard the loop: `#ifdef DEBUG` assert the body runs at most 200 times.
 
 ```
 Auction Started.
@@ -532,23 +537,33 @@ Aggressive Investor wins the auction.
 
 ### 2.4 Jail
 
-- [ ] **Step 17:** In `land_on`, `SQ_GOTOJAIL` sets `pos = 10`, `jailed = true`, `jailTurns = 0`, and **does not** pay
+- [x] **Step 17:** In `land_on`, `SQ_GOTOJAIL` sets `pos = 10`, `jailed = true`, `jailTurns = 0`, and **does not** pay
       GO — the player is moved directly, not walked (Rule 12).
-- [ ] **Step 18:** `resolve_jail(g, p)` runs as Rule 3 step 1, returning whether the player may move this turn:
+- [x] **Step 18:** `resolve_jail(g, p, d1, d2)` runs as Rule 3 step 1, returning whether the player is free to move
+      this turn. **The dice are rolled once in `play_turn` and handed in**:
 
 ```
 not jailed              -> true
-jailed, rolls doubles   -> release, move by that roll, return false (turn consumed)
+jailed, rolls doubles   -> release, return true   (play_turn moves and lands)
 jailed, can pay bail    -> charge JAIL_BAIL, release, return true
-jailed, jailTurns < 3   -> jailTurns++, return false
-jailed, jailTurns == 3  -> auto-pay bail (D10), release, return true
+jailed, jailTurns < 3   -> jailTurns++, return false (turn spent on the attempt)
+jailed, jailTurns == 3  -> release (D10), return true
 ```
 
 Landing on square 10 without being sent there is Just Visiting — no state change.
 
-- [ ] **Step 19:** Print each transition. §5 gives no jail template, so match the voice of its neighbours:
+> **Deviation from the drafted flow, and why.** The draft had `resolve_jail` roll its own dice and return *false* after
+> a doubles release. That breaks twice. A player released on doubles would move and then skip Rule 3 steps 4–7 —
+> sailing past whatever they landed on, paying no rent and buying nothing. And the bail path returned true, so
+> `play_turn` would roll *again*, giving that turn two rolls. Rolling once in `play_turn` and passing the dice in fixes
+> both: every exit now moves and resolves its landing exactly once.
+>
+> Which exit a player *prefers* is a strategy question milestone 6 owns. The placeholder always posts bail when it can
+> afford to, so the three-turn wait currently serves only the insolvent.
+
+- [x] **Step 19:** Print each transition. §5 gives no jail template, so match the voice of its neighbours:
       `%s is in Jail.`, `%s rolled doubles and left Jail.`, `%s paid LKR 300 bail.`
-- [ ] **Step 20:** Wire `resolve_jail` into `play_turn` before the roll; skip steps 2–7 when it returns false.
+- [x] **Step 20:** Wire `resolve_jail` into `play_turn` before the roll; skip steps 2–7 when it returns false.
 
 **Verify:**
 ```

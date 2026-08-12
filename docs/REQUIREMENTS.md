@@ -97,15 +97,15 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R2.3** 8-step turn sequence (Rule 3): penalties → roll → move → landing action → purchase → construction → financial transactions → end. Maintenance happens only in step 1 (Rule-LK 27).
 - [ ] **R2.4** A **turn** is one dice roll for one player unless another condition prevails. A **round** is one turn for every solvent player, in `order[]` sequence (clarification).
 - [ ] **R2.5** Pass or land on GO → +LKR 2,000 (Rule 4).
-- [ ] **R2.6** Unowned purchasable square: buy at its individual list price, or it goes **immediately** to auction (Rule 5).
-- [ ] **R2.7** Rent owed on owned, unmortgaged property; mortgaged collects nothing (Rule 7). Landing on one's own property charges nothing.
+- [x] **R2.6** Unowned purchasable square: buy at its individual list price, or it goes **immediately** to auction (Rule 5).
+- [x] **R2.7** Rent owed on owned, unmortgaged property; mortgaged collects nothing (Rule 7). Landing on one's own property charges nothing.
 - [ ] **R2.8** Full colour group = monopoly = only then may build (Rule 8).
 - [ ] **R2.9** Even building across group; ≤4 houses; hotel replaces exactly 4 houses; never houses + hotel together (Rules 9–10).
-- [ ] **R2.10** Rent multipliers on base rent (Table 6): 1×/2×/3×/5×/7× for 0–4 houses; 10× hotel.
+- [x] **R2.10** Rent multipliers on base rent (Table 6): 1×/2×/3×/5×/7× for 0–4 houses; 10× hotel.
 - [ ] **R2.11** Income Tax (square 4) = **15% of the player's current cash** (decision **D2′**), payable immediately; shortfall → debt recovery (Rule 11, decision **D11**). The rate is inflation-adjusted and scaled by the *Increase Property Tax* regulation.
 - [ ] **R2.12** Community Development Fund (square 2) = **10% of total assets** — the current market value of owned properties only, buildings excluded (decision **D16**) — payable immediately, same shortfall handling. Because the base is read through `square_value`, the levy tracks market fluctuations automatically.
-- [ ] **R2.13** Go To Jail → straight to square 10, no GO money (Rule 12).
-- [ ] **R2.14** Jail exit: pay LKR 300 bail, roll doubles, or wait 3 turns (Rule 13; after the 3rd turn see **D10**).
+- [x] **R2.13** Go To Jail → straight to square 10, no GO money (Rule 12).
+- [x] **R2.14** Jail exit: pay LKR 300 bail, roll doubles, or wait 3 turns (Rule 13; after the 3rd turn see **D10**).
 - [ ] **R2.15** Bankruptcy when liabilities exceed assets: buildings removed, policies expire, loans due, assets transferred (Rule 14, **D11**).
 - [ ] **R2.16** Game ends when one solvent player remains or after 500 rounds; then highest net worth wins (Rule 15).
 - [ ] **R2.17** Net worth = cash + property + buildings + railway + utility + claims receivable − loans − accrued interest − taxes due (Rule 15; receivable is always 0 per **D15**).
@@ -136,9 +136,9 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R3.13** Every 15 rounds, one of the 8 events (Tourism Boom, Fuel Crisis, Heavy Monsoon, Economic Recession, Stock Market Boom, Government Housing Programme, Foreign Investment, Political Unrest) fires, affecting **all** players for 15 rounds, with the exact listed effects. Interest-rate effects are relative (**D21**).
 
 **Auctions (Rule-LK 19–23)**
-- [ ] **R3.14** Triggered by declined purchase, bankruptcy liquidation, or foreclosure returns. Opening bid = **50% of the square's current market value** (LK 19), reduced a further 25% while its group is in decline (LK 32). Minimum increment LKR 250. All solvent players participate, **including the player who declined**.
-- [ ] **R3.15** Bidding starts with the player **immediately after the current player** in `order[]` and proceeds clockwise (clarification, decision **D23**). For bankruptcy and foreclosure auctions the anchor is the player whose turn it is.
-- [ ] **R3.16** On each opportunity a player either raises the bid or withdraws; withdrawal is permanent for that auction. The last remaining bidder pays their bid and takes ownership. A bid may never exceed the bidder's cash, and no loan may be taken mid-auction (LK 22). If **every** player declines at the opening price, ownership stays with the Bank (LK 23).
+- [x] **R3.14** Triggered by declined purchase, bankruptcy liquidation, or foreclosure returns. Opening bid = **50% of the square's current market value** (LK 19), reduced a further 25% while its group is in decline (LK 32). Minimum increment LKR 250. All solvent players participate, **including the player who declined**.
+- [x] **R3.15** Bidding starts with the player **immediately after the current player** in `order[]` and proceeds clockwise (clarification, decision **D23**). For bankruptcy and foreclosure auctions the anchor is the player whose turn it is.
+- [x] **R3.16** On each opportunity a player either raises the bid or withdraws; withdrawal is permanent for that auction. The last remaining bidder pays their bid and takes ownership. A bid may never exceed the bidder's cash, and no loan may be taken mid-auction (LK 22). If **every** player declines at the opening price, ownership stays with the Bank (LK 23).
 
 **Government regulations (Rule-LK 24)**
 - [ ] **R3.17** Every 20 rounds one of the 8 regulations is selected: Increase Property Tax (+50% income tax), Reduce Loan Interest (−2%), Housing Subsidy (−30% house cost), Luxury Property Tax (25% of developed hotel-property value, charged **once on activation** per **D24**), Railway Modernization (+25% railway rent), Electricity Tariff Revision (+20% utility rent), Insurance Regulation (−15% premiums, coverage unchanged), Anti-Speculation Act (≤3 undeveloped properties per **D25**).

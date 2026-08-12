@@ -183,18 +183,10 @@ static void rule_line(char c, int n)
     putchar('\n');
 }
 
-/* Counted directly off the board rather than cached on the Player, so the
-   figure cannot drift from reality after a foreclosure or an auction. */
-static int count_properties(const GameState *g, int p)
-{
-    int i, n = 0;
-    for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].type == SQ_PROPERTY && g->board[i].owner == p) {
-            n++;
-        }
-    }
-    return n;
-}
+/* Property and hotel counts are read straight off the board rather than
+   cached on the Player, so the figures cannot drift from reality after a
+   foreclosure or an auction. count_owned lives in board.c and does the
+   property half; only hotels need a local helper. */
 
 static int count_hotels(const GameState *g, int p)
 {
@@ -239,7 +231,7 @@ void round_summary(const GameState *g)
         printf("%s\n", pl->name);
         printf("Cash : LKR %s\n", fmt_lkr(b, pl->cash));
         printf("Net Worth : LKR %s\n", fmt_lkr(b, net_worth(g, p)));
-        printf("Properties : %d\n", count_properties(g, p));
+        printf("Properties : %d\n", count_owned(g, p, SQ_PROPERTY));
         printf("Hotels : %d\n", count_hotels(g, p));
 
         /* "None", never "LKR 0" -- the template is explicit about this and
@@ -336,14 +328,175 @@ void final_report(const GameState *g)
 
 /* Rule 3. Steps 2 and 3 only for now; the remaining six arrive with the
    systems they depend on, in the order the milestones introduce them. */
+/* ----------------------------------------------------------- landing --- */
+
+/* Rule 3 step 4: resolve whatever the square the player stopped on does.
+ *
+ * Every SquareType is listed explicitly and there is no default label. That
+ * is deliberate: adding a type later produces
+ *   warning: enumeration value 'SQ_X' not handled in switch
+ * at exactly the places that need updating. A default: would compile
+ * silently and do nothing, which is the failure this switch exists to
+ * prevent.
+ */
+/* Rules 5 and 7: an unowned purchasable square is bought or auctioned; an
+ * owned one charges rent unless its owner is standing on it.
+ *
+ * Rule 5 gives no third option. Declining is not "nothing happens" -- it is
+ * an auction, immediately, which is why the else branch is not empty.
+ */
+static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
+{
+    char    b[FMT_BUF];
+    Square *s = &g->board[sq];
+    int     rent;
+
+    if (s->owner < 0) {
+        int price = square_value(g, sq);
+
+        if (decide_buy(g, p, sq) && charge(g, p, price, -1)) {
+            s->owner          = p;
+            s->purchasedRound = g->round;    /* D19: age starts at purchase */
+            printf("%s purchased %s for LKR %s.\n", g->players[p].name, s->name,
+                   fmt_lkr(b, price));
+            printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+        } else {
+            /* Rule 5 gives no third option: a declined square goes straight
+               to auction, and LK 19 lets the decliner bid in it. */
+            run_auction(g, sq, p);
+        }
+        return;
+    }
+
+    if (s->owner == p) {
+        return;                              /* your own square is free   */
+    }
+
+    rent = square_rent(g, sq, diceTotal);
+    if (rent <= 0) {
+        return;                              /* mortgaged -- Rule 7       */
+    }
+
+    printf("%s landed on %s.\n", g->players[p].name, s->name);
+    if (charge(g, p, rent, s->owner)) {
+        printf("Rent Paid : LKR %s.\n", fmt_lkr(b, rent));
+        printf("Owner : %s.\n", g->players[s->owner].name);
+    } else {
+        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, rent));
+    }
+}
+
+void land_on(GameState *g, int p, int sq, int diceTotal)
+{
+    switch (g->board[sq].type) {
+    case SQ_PROPERTY:
+    case SQ_RAILWAY:
+    case SQ_UTILITY:
+        land_on_purchasable(g, p, sq, diceTotal);
+        break;
+
+    case SQ_TAX:
+        pay_income_tax(g, p);
+        break;
+
+    case SQ_COMMUNITY:                      /* D17: levies, never draws */
+        pay_community_fund(g, p);
+        break;
+
+    /* Nothing to resolve. GO already paid during movement (Rule 4); Jail
+       here is Just Visiting; Free Parking does nothing in this ruleset. */
+    case SQ_GO:
+    case SQ_JAIL:
+    case SQ_PARKING:
+        break;
+
+    /* Rule 12: transferred, not walked. Deliberately not move_player -- that
+       would pay the GO salary on the way round, and Rule 12 says the player
+       does not collect it. */
+    case SQ_GOTOJAIL:
+        g->players[p].pos       = SQ_IDX_JAIL;
+        g->players[p].jailed    = true;
+        g->players[p].jailTurns = 0;
+        printf("%s was sent to Jail.\n", g->players[p].name);
+        break;
+
+    /* Still to come, each in its own step. */
+    case SQ_BANK:
+    case SQ_INSURANCE:
+    case SQ_EVENT:
+        break;
+    }
+}
+
+/* ---------------------------------------------------------------- jail -- */
+
+/* Rule 3 step 1, for a jailed player. Returns whether they are free to move
+ * this turn; the dice have already been rolled by the caller.
+ *
+ * Rule 13 gives three ways out, and this takes them in the order that costs
+ * the player least: doubles are free, bail costs 300, and waiting costs a
+ * turn. D10 settles what the rule leaves open -- after the third failed
+ * turn bail is paid automatically, so nobody sits in Jail forever.
+ *
+ * The dice come in rather than being rolled here. Rolling separately would
+ * give a released player two rolls in one turn, and returning "the turn is
+ * over" after a doubles release would skip Rule 3 steps 4-7 -- the player
+ * would move and then sail past whatever they landed on, paying no rent and
+ * buying nothing. One roll, one move, one landing.
+ */
+static bool resolve_jail(GameState *g, int p, int d1, int d2)
+{
+    char    b[FMT_BUF];
+    Player *pl = &g->players[p];
+
+    if (!pl->jailed) {
+        return true;
+    }
+
+    if (d1 == d2) {                             /* Rule 13: doubles       */
+        pl->jailed = false;
+        printf("%s rolled doubles and left Jail.\n", pl->name);
+        return true;
+    }
+
+    if (charge(g, p, JAIL_BAIL, -1)) {          /* Rule 13: pay the bail  */
+        pl->jailed = false;
+        printf("%s paid LKR %s bail.\n", pl->name, fmt_lkr(b, JAIL_BAIL));
+        return true;
+    }
+
+    pl->jailTurns++;
+    if (pl->jailTurns >= JAIL_MAX_TURNS) {      /* D10: served the wait   */
+        pl->jailed    = false;
+        pl->jailTurns = 0;
+        printf("%s has served three turns and leaves Jail.\n", pl->name);
+        return true;
+    }
+
+    printf("%s is in Jail.\n", pl->name);
+    return false;
+}
+
+/* ------------------------------------------------------------- a turn --- */
+
+/* Rule 3's eight steps. Steps arrive as the milestones implement them; the
+   numbering below tracks the rule so the gaps stay visible. */
 void play_turn(GameState *g, int p)
 {
     int d1, d2, total;
 
-    total = roll_dice(&d1, &d2);
+    total = roll_dice(&d1, &d2);                    /* 2. roll two dice   */
     printf("%s rolled %d.\n", g->players[p].name, total);
 
-    move_player(g, p, total);
+    /* 1. resolve outstanding penalties. The roll happens first only because
+       Rule 13's doubles test needs it; a jailed player who stays in has
+       simply spent their turn on the attempt. */
+    if (!resolve_jail(g, p, d1, d2)) {
+        return;
+    }
+
+    move_player(g, p, total);                       /* 3. move clockwise  */
+    land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
 }
 
 /* One round is one turn for every solvent player, in order[] sequence --
