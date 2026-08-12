@@ -379,11 +379,13 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     }
 
     printf("%s landed on %s.\n", g->players[p].name, s->name);
+
+    /* No else branch. charge now runs the D11 ladder and prints Rule 14's
+       bankruptcy block if the ladder cannot save the payer, by which point
+       the creditor has already received whatever was left. */
     if (charge(g, p, rent, s->owner)) {
         printf("Rent Paid : LKR %s.\n", fmt_lkr(b, rent));
         printf("Owner : %s.\n", g->players[s->owner].name);
-    } else {
-        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, rent));
     }
 }
 

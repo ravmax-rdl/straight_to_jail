@@ -309,12 +309,18 @@ int         pct_of(int value, int percent);
 const char *fmt_lkr(char *buf, int amount);
 int         net_worth(const GameState *g, int p);
 
-/* finance.c -- money movement. These two are the only functions in the
-   program that assign to Player.cash. charge returns false, having moved
-   nothing, when the player cannot cover the amount; the D11 recovery ladder
-   replaces that in milestone 3. */
+/* finance.c -- money movement. charge is the single place in the program
+   where insolvency is detected: a short payer goes through the D11 ladder,
+   and one the ladder cannot save is declared bankrupt on the spot. It
+   returns false only in that case, with the block already printed. */
 void credit(GameState *g, int p, int amt);
 bool charge(GameState *g, int p, int amt, int toPlayer);
+
+/* finance.c -- Rule 11's debt recovery and Rule 14's bankruptcy (D11).
+   raise_funds is called by charge and by nothing else; creditor is -1 when
+   the Bank is owed. */
+bool raise_funds(GameState *g, int p, int needed);
+void declare_bankrupt(GameState *g, int p, int creditor);
 
 /* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
    assets), so deliberately two functions rather than one parameterised. */

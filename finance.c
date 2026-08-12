@@ -59,19 +59,25 @@ void credit(GameState *g, int p, int amt)
 
 /* Move amt from p to toPlayer, or to the Bank when toPlayer is -1.
  *
- * Returns false, having moved nothing, if p cannot cover it. Milestone 3
- * replaces that with the D11 ladder -- sell buildings at half, mortgage what
- * is free, and only then declare bankruptcy -- which is why the caller is
- * given a bool rather than this function simply clamping. Until then an
- * unpayable charge is reported and skipped, so no balance can go negative
- * behind our back.
+ * The single place in the program where insolvency is detected. A player
+ * short of cash is put through the D11 recovery ladder first, and only a
+ * player the ladder cannot save is declared bankrupt -- so every rule that
+ * charges anything gets Rule 11's "normal debt recovery" and Rule 14's
+ * bankruptcy for free, and none of them has to ask.
+ *
+ * Returns false only when the charge bankrupted the payer. Callers need not
+ * announce the shortfall themselves: by the time this returns false the
+ * bankruptcy block has already printed, and Rule 14 has moved whatever the
+ * player had left to the creditor.
  */
 bool charge(GameState *g, int p, int amt, int toPlayer)
 {
     if (amt <= 0) {
         return true;
     }
-    if (g->players[p].cash < amt) {
+
+    if (g->players[p].cash < amt && !raise_funds(g, p, amt)) {
+        declare_bankrupt(g, p, toPlayer);        /* Rule 14                 */
         return false;
     }
 
@@ -128,11 +134,13 @@ void pay_income_tax(GameState *g, int p)
     int  due  = pct_of(g->players[p].cash, rate);
 
     printf("%s landed on Income Tax.\n", g->players[p].name);
+
+    /* No else branch: charge now runs the D11 ladder and, failing that,
+       prints Rule 14's bankruptcy block itself. A "cannot pay" line here
+       would only repeat what has already been said, after it was said. */
     if (charge(g, p, due, -1)) {
         printf("Income Tax Paid : LKR %s.\n", fmt_lkr(b, due));
         printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
-    } else {
-        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, due));
     }
 }
 
@@ -154,8 +162,6 @@ void pay_community_fund(GameState *g, int p)
     if (charge(g, p, due, -1)) {
         printf("Contribution Paid : LKR %s.\n", fmt_lkr(b, due));
         printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
-    } else {
-        printf("%s cannot pay LKR %s.\n", g->players[p].name, fmt_lkr(b, due));
     }
 }
 
@@ -633,13 +639,189 @@ void check_loan_default(GameState *g)
 
         /* LK 7: foreclosure alone does not bankrupt anyone. A player who
            keeps a property or a rupee plays on; one left with neither has
-           nothing to play with. Milestone step 24 replaces this with
-           declare_bankrupt, which also disposes of what is left. */
+           nothing to play with. The creditor is the Bank -- LK 6 cleared the
+           debt above, so nobody is owed anything by this point. */
         if (!owns_any_square(g, i) && pl->cash <= 0) {
-            pl->bankrupt = true;
-            printf("%s has been declared bankrupt.\n", pl->name);
-            printf("Remaining assets transferred to the Bank.\n");
+            declare_bankrupt(g, i, -1);
         }
+    }
+}
+
+/* ------------------------------------------- debt recovery, bankruptcy -- */
+/*
+ * Rule 11 charges taxes "immediately" and Rule 14 declares bankruptcy when
+ * liabilities exceed assets, but neither says what happens in between. D11
+ * settles it as a two-rung ladder, taken in this order and no other:
+ *
+ *   1. sell buildings back to the Bank at 50% of construction cost
+ *   2. mortgage assets that are neither mortgaged nor pledged
+ *   3. still short -- bankrupt
+ *
+ * Repaying or refinancing a loan is deliberately NOT a rung. LK 5 and the
+ * clarification confine every loan action to the Bank square, and letting a
+ * cornered player restructure their debt from wherever they happen to be
+ * standing would make that square pointless.
+ */
+
+/* Half of what the topmost building on this square cost to put up. */
+static int demolition_refund(const GameState *g, int sq)
+{
+    return pct_of(building_cost(g, sq, g->board[sq].hotel), 50);
+}
+
+/* Sell exactly one level of development, the reverse of one build_step pass.
+ *
+ * A hotel goes back to the four houses it replaced rather than to bare land,
+ * which is Rule 10 read backwards and keeps the refund honest: the owner paid
+ * four house costs and then a hotel cost, so unwinding in the same two stages
+ * returns half of each. Dropping straight to zero would refund half a hotel
+ * for buildings worth a hotel plus four houses.
+ */
+static void sell_one_building(GameState *g, int p, int sq)
+{
+    char    b[FMT_BUF];
+    Square *s      = &g->board[sq];
+    int     refund = demolition_refund(g, sq);
+
+    if (s->hotel) {
+        s->hotel  = false;
+        s->houses = MAX_HOUSES;
+        printf("%s sold the hotel on %s.\n", g->players[p].name, s->name);
+    } else {
+        s->houses--;
+        printf("%s sold a house on %s.\n", g->players[p].name, s->name);
+    }
+
+    credit(g, p, refund);
+    printf("Received LKR %s.\n", fmt_lkr(b, refund));
+}
+
+/* D11, called by charge and by nothing else. Returns whether p can now cover
+ * `needed`.
+ *
+ * Rung 1 always takes from the MOST developed square, which is the builder
+ * run in reverse and keeps groups even on the way down just as it does on the
+ * way up.
+ *
+ * Rung 2 mortgages cheapest first. Mortgage value and rent both scale with
+ * the property, so raising a given sum from the bottom of the portfolio
+ * sacrifices the smallest rent stream, and the properties worth holding are
+ * the last to go.
+ *
+ * The ordering also makes rung 2 safe without a check of its own. Rung 1 runs
+ * until the money is found or no building is left standing, so by the time
+ * anything is mortgaged the board carries no buildings at all -- which is the
+ * ordinary rule that a developed property cannot be mortgaged, obtained
+ * structurally rather than asserted.
+ */
+bool raise_funds(GameState *g, int p, int needed)
+{
+    int i;
+
+    while (g->players[p].cash < needed) {
+        int best = -1, bestLevel = 0;
+
+        for (i = 0; i < NUM_SQUARES; i++) {
+            int level;
+
+            if (g->board[i].owner != p) {
+                continue;
+            }
+            level = development_level(g, i);
+            if (level > bestLevel) {
+                best      = i;
+                bestLevel = level;
+            }
+        }
+        if (best < 0) {
+            break;                          /* nothing left to demolish    */
+        }
+        sell_one_building(g, p, best);
+    }
+
+    while (g->players[p].cash < needed) {
+        char b[FMT_BUF];
+        int  best = -1, bestValue = 0, value;
+
+        for (i = 0; i < NUM_SQUARES; i++) {
+            const Square *s = &g->board[i];
+
+            if (s->owner != p || s->mortgaged || s->loanLocked) {
+                continue;
+            }
+            if (!is_purchasable(g, i)) {
+                continue;
+            }
+            value = mortgage_value(g, i);
+            if (best < 0 || value < bestValue) {
+                best      = i;
+                bestValue = value;
+            }
+        }
+        if (best < 0) {
+            break;                          /* nothing left to pledge      */
+        }
+
+        g->board[best].mortgaged = true;
+        credit(g, p, bestValue);
+        printf("%s mortgaged %s.\n", g->players[p].name, g->board[best].name);
+        printf("Received LKR %s.\n", fmt_lkr(b, bestValue));
+    }
+
+    return g->players[p].cash >= needed;
+}
+
+/* Rule 14, and the end of a player's game.
+ *
+ * Section 5's block says the assets go to the Bank, and that is literally
+ * what happens to every square: ownership reverts, buildings come down,
+ * policies lapse, and LK 19 then puts each one up for auction. Rule 14's
+ * transfer to the creditor is of the CASH, which is all a bankrupt player has
+ * left that anyone can be handed directly.
+ *
+ * The loan dies with the player rather than following the estate. LK 6
+ * already treats foreclosure as settlement in full however little the
+ * collateral fetched, so there is no reading of the rules under which a debt
+ * outlives the debtor.
+ */
+void declare_bankrupt(GameState *g, int p, int creditor)
+{
+    Player *pl = &g->players[p];
+    int     assets[NUM_SQUARES];
+    int     n = 0, k, sq;
+
+    if (pl->bankrupt) {
+        return;                     /* already gone; do not auction twice   */
+    }
+    pl->bankrupt = true;
+
+    printf("%s has been declared bankrupt.\n", pl->name);
+    printf("Remaining assets transferred to the Bank.\n");
+
+    /* The one assignment to cash outside credit and charge. Zeroing a
+       bankrupt player's balance is not a transaction -- there is no second
+       party when the creditor is the Bank, and routing it through charge
+       would re-enter the function that called this one. */
+    if (creditor >= 0 && pl->cash > 0) {
+        credit(g, creditor, pl->cash);
+    }
+    pl->cash = 0;
+
+    pl->loan.active    = false;
+    pl->loan.principal = 0;
+
+    for (sq = 0; sq < NUM_SQUARES; sq++) {
+        if (g->board[sq].owner == p) {
+            reset_to_bank(&g->board[sq]);
+            assets[n++] = sq;
+        }
+    }
+
+    /* Collected first, auctioned second, for the reason foreclosure does the
+       same: run_auction assigns ownership, and one sweep doing both would
+       find a square it had already sold. */
+    for (k = 0; k < n; k++) {
+        run_auction(g, assets[k], p);       /* LK 19                        */
     }
 }
 
@@ -678,6 +860,20 @@ int net_worth(const GameState *g, int p)
             total += building_cost(g, i, true);
         } else if (s->houses > 0) {
             total += building_cost(g, i, false) * s->houses;
+        }
+
+        /* A mortgage is money already drawn against the square, so it comes
+           straight back off. Rule 15's "- loans" names the LK 1-7 advance
+           and says nothing about mortgages, but they are the same instrument
+           at a different desk -- cash advanced against an asset the player
+           keeps and still shows at full market value above. Omitting it
+           makes mortgaging RAISE a player's net worth, and a balance sheet
+           in which borrowing improves your position is arithmetically wrong
+           before it is unfaithful to anything. Seed 42 had a player showing
+           65,879 with nine of ten properties mortgaged and the tenth
+           pledged. */
+        if (s->mortgaged) {
+            total -= mortgage_value(g, i);
         }
     }
 
