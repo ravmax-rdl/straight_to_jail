@@ -330,17 +330,22 @@ int roll_dice(int *d1, int *d2);
 bool board_init(GameState *g, const char *csvPath);
 void move_player(GameState *g, int p, int steps);
 
-/* board.c -- ownership queries. */
+/* board.c -- ownership queries. development_level puts houses and hotels on
+   one scale (0-4, then MAX_HOUSES + 1) so Rule 9's evenness can be judged;
+   a hotel stores houses == 0 and would otherwise read as an empty lot. */
 bool is_purchasable(const GameState *g, int sq);
 int  count_owned(const GameState *g, int p, SquareType type);
+bool group_monopoly(const GameState *g, int p, PropertyGroup grp);
+int  development_level(const GameState *g, int sq);
 
 /* board.c -- the choke points. Every timed modifier in the game is read in
    one of these four and nowhere else. square_value is built on the
-   individual Rent.csv price; mortgage_value on the Appendix B group figure
-   (D18), which is why they are separate functions. */
+   individual Rent.csv price; mortgage_value and building_cost on the
+   Appendix B group figures (D18), which is why they are separate functions. */
 int square_value(const GameState *g, int sq);
 int mortgage_value(const GameState *g, int sq);
 int square_rent(const GameState *g, int sq, int diceTotal);
+int building_cost(const GameState *g, int sq, bool hotel);
 
 /* events.c -- the effect registry (D12). Stubbed to 0 until milestone 4;
    the signature is final. */
@@ -352,6 +357,7 @@ int effect_modifier(const GameState *g, EffectKind kind, int square, int player)
    minBid is the smallest legal bid right now. */
 bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
+int  decide_build(GameState *g, int p);
 
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);

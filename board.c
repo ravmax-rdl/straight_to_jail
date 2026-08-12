@@ -500,6 +500,53 @@ int count_owned(const GameState *g, int p, SquareType type)
     return n;
 }
 
+/* Rule 8: p holds every square of the colour group, which is the only thing
+ * that permits construction.
+ *
+ * GRP_NONE is false rather than an error. Railways, utilities and the special
+ * squares all carry it, so a caller sweeping the board asks this question of
+ * them too and must get a plain "no" -- Rule 8 is about colour groups, and
+ * owning all four railways is not a monopoly for building purposes.
+ */
+bool group_monopoly(const GameState *g, int p, PropertyGroup grp)
+{
+    int i, members = 0;
+
+    if (grp == GRP_NONE) {
+        return false;
+    }
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group != grp) {
+            continue;
+        }
+        if (g->board[i].owner != p) {
+            return false;
+        }
+        members++;
+    }
+
+    return members > 0;
+}
+
+/* How far a square is developed, on one scale: 0-4 houses, or MAX_HOUSES + 1
+ * for a hotel.
+ *
+ * Rule 10 makes a hotel a replacement for four houses rather than a fifth
+ * one, so board state stores them in separate fields -- which leaves a hotel
+ * reading houses == 0, indistinguishable from an empty lot by that field
+ * alone. Every caller that ranks development therefore asks this instead:
+ * the builder picking the least-developed square in a group, and the Rule 9
+ * evenness check. Without it the builder would see a fresh hotel as the
+ * emptiest property in its group and immediately start it over with houses.
+ */
+int development_level(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    return s->hotel ? MAX_HOUSES + 1 : s->houses;
+}
+
 /* ------------------------------------------------------- choke points -- */
 /*
  * Every modifier in the game is read in one of the four functions below, and
@@ -539,6 +586,25 @@ int mortgage_value(const GameState *g, int sq)
     const Square *s = &g->board[sq];
 
     return apply_pct(s->mortgageValue, effect_modifier(g, EFF_MORTGAGE_MUL, sq, s->owner));
+}
+
+/* D18: construction cost comes from the GROUP table in Appendix B, so every
+ * property in a colour group builds at the same price regardless of what its
+ * individual purchase price is.
+ *
+ * The fourth choke point, and it earns the name several times over: house and
+ * hotel prices are read by the builder, by LK 27's maintenance charge (a
+ * percentage of them), by D1's repair cost, by the D11 ladder's 50% sale
+ * price, and by net worth's building book value. The Housing Subsidy
+ * regulation and the Fuel Crisis both move construction costs, and they move
+ * all five of those readings by moving this one function.
+ */
+int building_cost(const GameState *g, int sq, bool hotel)
+{
+    const Square *s    = &g->board[sq];
+    int           cost = hotel ? s->hotelCost : s->houseCost;
+
+    return apply_pct(cost, effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner));
 }
 
 /* Rule 7 and Tables 6-8. Returns what the visitor owes the owner.

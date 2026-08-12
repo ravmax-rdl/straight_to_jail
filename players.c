@@ -48,3 +48,73 @@ int decide_bid(GameState *g, int p, int sq, int minBid)
     }
     return minBid;
 }
+
+/* Rule 8 plus the consequence Rule 9 has for a mortgaged member.
+ *
+ * A mortgaged square cannot be built on, and building on its groupmates would
+ * push them further and further ahead of it -- so the whole group is barred
+ * until the mortgage is lifted. Allowing the rest to build would break the
+ * evenness requirement rather than satisfy it.
+ */
+static bool group_developable(const GameState *g, int p, PropertyGroup grp)
+{
+    int i;
+
+    if (!group_monopoly(g, p, grp)) {
+        return false;
+    }
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && g->board[i].mortgaged) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* PLACEHOLDER (milestone 6). Rule 3 step 6: which square to build on, or -1
+ * to build nothing. The caller decides house or hotel from the square's
+ * current level and executes; this function only chooses.
+ *
+ * Always the LEAST developed square across every monopolised group. That one
+ * rule delivers Rule 9's even building for free: a square can only ever be
+ * one level ahead of its groupmates, because the moment it is, one of them
+ * becomes the minimum and takes the next building. No explicit evenness check
+ * is needed anywhere, and the DEBUG invariant in game.c confirms it holds.
+ *
+ * A square already at MAX_HOUSES is the minimum only once every other member
+ * has four too, which is exactly Rule 10's precondition for a hotel -- so the
+ * upgrade falls out of the same comparison rather than needing its own pass.
+ *
+ * Affordability is checked here rather than left to charge(): building is
+ * voluntary, and a player who would have to sell buildings to fund a building
+ * should simply not build. See build_step in game.c.
+ */
+int decide_build(GameState *g, int p)
+{
+    int i, best = -1, bestLevel = MAX_HOUSES + 1;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+        int           level;
+
+        if (s->type != SQ_PROPERTY || s->owner != p) {
+            continue;
+        }
+        if (!group_developable(g, p, s->group)) {
+            continue;
+        }
+
+        level = development_level(g, i);
+        if (level > MAX_HOUSES || level >= bestLevel) {
+            continue;               /* already a hotel, or not the emptiest  */
+        }
+        if (g->players[p].cash < building_cost(g, i, level == MAX_HOUSES)) {
+            continue;
+        }
+
+        best      = i;
+        bestLevel = level;
+    }
+
+    return best;
+}
