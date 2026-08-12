@@ -11,8 +11,9 @@
  * are permitted to contain a double. Milestone 6 greps for violations.
  */
 
+#include <limits.h>   /* INT_MAX, in the DEBUG principal guard only */
 #include <stdio.h>
-#include <stdlib.h>   /* abort(), in the DEBUG auction guard only */
+#include <stdlib.h>   /* abort(), in the DEBUG guards only */
 
 #include "types.h"
 
@@ -272,6 +273,376 @@ void run_auction(GameState *g, int sq, int anchorPlayer)
     printf("%s wins the auction.\n", g->players[highBidder].name);
 }
 
+/* --------------------------------------------------------------- loans -- */
+/*
+ * LK 1-7. A secured loan against board assets, at a rate frozen on the day it
+ * is issued, compounding every round, repayable only at the Bank square.
+ *
+ * D4 is what gives this section its teeth. LK 4 adds interest every round
+ * while Table 9 labels the rate annual, and taking LK 4 literally means 8%
+ * per round -- x4.66 over a twenty-round term, x16.4 at 15%. Combined with
+ * R1.8, which makes landing on square 38 the only route to repayment, a loan
+ * is a genuine gamble rather than cheap money. Default is meant to happen.
+ */
+
+/* LK 1: buildings are never collateral, and LK 3 bars an asset already
+   pledged. A mortgaged asset has had its value drawn down already, so it
+   cannot secure a second advance either. */
+bool eligible_collateral(const GameState *g, int p, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    return s->owner == p && is_purchasable(g, sq) && !s->mortgaged && !s->loanLocked;
+}
+
+/* LK 2 and D5: 75% of the summed mortgage value of everything still free to
+ * pledge. Because eligible_collateral excludes what is already locked, this
+ * is the REMAINING capacity, which is exactly what the LK 5 increase action
+ * needs to know.
+ *
+ * The 75% is taken once over the sum rather than per asset, and
+ * pledge_collateral compares against the same running sum, so the two can
+ * never disagree by a rupee of rounding and ask for one asset too many.
+ */
+int loan_capacity(const GameState *g, int p)
+{
+    int i, total = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (eligible_collateral(g, p, i)) {
+            total += mortgage_value(g, i);
+        }
+    }
+    return pct_of(total, LOAN_LTV_PCT);
+}
+
+/* LK 5 permits one loan at a time, so an indebted player can borrow nothing
+   more as a NEW loan -- their route to more cash is the increase action,
+   which draws on loan_capacity directly. */
+int max_loan(const GameState *g, int p)
+{
+    if (g->players[p].loan.active) {
+        return 0;
+    }
+    return loan_capacity(g, p);
+}
+
+/* D22: lock the minimum set of assets, dearest first, whose 75% LTV covers
+ * the advance. Prints each name as it goes, under the "Collateral :" header
+ * the caller has already written.
+ *
+ * LK 3 is silent on how much a loan pledges, and locking only what is needed
+ * is strictly the more playable reading: it never exceeds LK 2's cap, and it
+ * leaves the rest of the portfolio free to be mortgaged later when the D11
+ * ladder comes calling. Dearest first is what keeps the set minimal.
+ *
+ * Terminates because each pass locks one more square, and a locked square is
+ * no longer eligible.
+ */
+static void pledge_collateral(GameState *g, int p, int amount)
+{
+    int collateral = 0;
+
+    while (pct_of(collateral, LOAN_LTV_PCT) < amount) {
+        int i, best = -1, bestValue = 0;
+
+        for (i = 0; i < NUM_SQUARES; i++) {
+            int v;
+
+            if (!eligible_collateral(g, p, i)) {
+                continue;
+            }
+            v = mortgage_value(g, i);
+            if (best < 0 || v > bestValue) {
+                best      = i;
+                bestValue = v;
+            }
+        }
+        if (best < 0) {
+            return;              /* capacity exhausted; the caller capped   */
+        }
+
+        g->board[best].loanLocked = true;
+        collateral += bestValue;
+        printf("%s\n", g->board[best].name);
+    }
+}
+
+/* Free every asset p pledged. Called on full settlement and on foreclosure,
+   the only two ways a loan ever ends. */
+static void unlock_collateral(GameState *g, int p)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p) {
+            g->board[i].loanLocked = false;
+        }
+    }
+}
+
+/* D21: the rate a NEW loan is written at. Additive adjustments first --
+ * LK 24's Reduce Loan Interest and Appendix A's rate cards are percentage
+ * points -- then the relative shifts that large events apply.
+ *
+ * Square is -1 because the rate belongs to the economy rather than to any
+ * square; only global and player-scoped effects can reach it. Both reads are
+ * live now rather than deferred, so milestone 4 pushes its effects and this
+ * function needs no edit.
+ */
+static int new_loan_rate(const GameState *g, int p)
+{
+    int rate = g->econ.interestRatePct + effect_modifier(g, EFF_INTEREST_ADD, -1, p);
+
+    rate = apply_pct(rate, effect_modifier(g, EFF_INTEREST_MUL, -1, p));
+    return rate < 0 ? 0 : rate;       /* a cut may reach zero, never below */
+}
+
+/* LK 2-4, 13. Credits the cash immediately and freezes the rate for life. */
+void grant_loan(GameState *g, int p, int amount)
+{
+    char    b[FMT_BUF];
+    Player *pl  = &g->players[p];
+    int     cap = max_loan(g, p);
+    int     rate;
+
+    if (pl->loan.active || amount <= 0 || cap <= 0) {
+        return;
+    }
+    if (amount > cap) {
+        amount = cap;                          /* LK 2 is a hard ceiling   */
+    }
+    rate = new_loan_rate(g, p);
+
+    printf("%s obtained a secured loan.\n", pl->name);
+    printf("Loan Amount : LKR %s.\n", fmt_lkr(b, amount));
+    printf("Collateral :\n");
+    pledge_collateral(g, p, amount);
+    printf("Interest Rate : %d%%\n", rate);
+    printf("Duration : %d Rounds\n", LOAN_ROUNDS);
+
+    pl->loan.active      = true;
+    pl->loan.principal   = amount;
+    pl->loan.ratePct     = rate;               /* LK 13: frozen for life   */
+    pl->loan.issuedRound = g->round;           /* D19: one clock           */
+    pl->loan.termRounds  = LOAN_ROUNDS;
+
+    credit(g, p, amount);
+}
+
+/* LK 5's increase action: top up against whatever collateral is still free.
+ *
+ * The rate is re-frozen on the combined balance, since the whole debt is now
+ * one advance written today. The maturity date deliberately does not move --
+ * extending the term is a separate LK 5 action with its own cost in a Bank
+ * landing, and rolling it into a top-up would hand the player both for one.
+ */
+void increase_loan(GameState *g, int p, int extra)
+{
+    char    b[FMT_BUF];
+    Player *pl  = &g->players[p];
+    int     cap = loan_capacity(g, p);
+    int     rate;
+
+    if (!pl->loan.active || extra <= 0 || cap <= 0) {
+        return;
+    }
+    if (extra > cap) {
+        extra = cap;
+    }
+    rate = new_loan_rate(g, p);
+
+    printf("%s increased the loan amount.\n", pl->name);
+    printf("Loan Amount : LKR %s.\n", fmt_lkr(b, extra));
+    printf("Collateral :\n");
+    pledge_collateral(g, p, extra);
+    printf("Interest Rate : %d%%\n", rate);
+    printf("Duration : %d Rounds\n", pl->loan.termRounds);
+
+    pl->loan.principal += extra;
+    pl->loan.ratePct    = rate;
+    credit(g, p, extra);
+}
+
+/* LK 5's extend action. Buys twenty more rounds before the default check
+   starts looking, and nothing else -- the principal keeps compounding. */
+void extend_loan(GameState *g, int p)
+{
+    Player *pl = &g->players[p];
+
+    if (!pl->loan.active) {
+        return;
+    }
+    pl->loan.termRounds += LOAN_ROUNDS;
+    printf("%s extended the loan period.\n", pl->name);
+    printf("Duration : %d Rounds\n", pl->loan.termRounds);
+}
+
+/* LK 5's two repayment actions, part and full, which differ only in amount.
+ *
+ * Cash is tested before charging. Repayment is voluntary, and D11 explicitly
+ * refuses to make it a rung of the recovery ladder -- a player selling
+ * buildings to service a loan is the exact spiral LK 5 confines to the Bank
+ * square to prevent.
+ */
+void repay_loan(GameState *g, int p, int amount)
+{
+    char    b[FMT_BUF];
+    Player *pl = &g->players[p];
+
+    if (!pl->loan.active || amount <= 0) {
+        return;
+    }
+    if (amount > pl->loan.principal) {
+        amount = pl->loan.principal;
+    }
+    if (pl->cash < amount || !charge(g, p, amount, -1)) {
+        return;
+    }
+
+    pl->loan.principal -= amount;
+    printf("%s repaid LKR %s.\n", pl->name, fmt_lkr(b, amount));
+
+    if (pl->loan.principal <= 0) {
+        pl->loan.active = false;
+        unlock_collateral(g, p);
+    }
+
+    printf("Outstanding Balance :\n");
+    printf("LKR %s.\n", fmt_lkr(b, pl->loan.principal));
+}
+
+/* LK 4 and D4, once per round for every live loan.
+ *
+ * At the rate the loan was ISSUED at, never the current one -- LK 13 freezes
+ * it, and Loan owning its own ratePct is what makes that correct by
+ * construction rather than by everyone remembering. Milestone 4's inflation
+ * moves econ.interestRatePct and this line does not notice, which is the
+ * point.
+ */
+void accrue_interest(GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        Player *pl = &g->players[i];
+
+        if (pl->bankrupt || !pl->loan.active) {
+            continue;
+        }
+        pl->loan.principal = apply_pct(pl->loan.principal, pl->loan.ratePct);
+
+#ifdef DEBUG
+        /* Compounding is the one place in the program where a figure grows
+           without bound. Real terms cap out in the low hundreds of thousands;
+           anything near INT_MAX means a term or a rate has gone wrong. */
+        if (pl->loan.principal > INT_MAX / 2) {
+            fprintf(stderr, "R%d: %s principal %d is out of range\n",
+                    g->round, pl->name, pl->loan.principal);
+            abort();
+        }
+#endif
+    }
+}
+
+/* Return a square to the Bank, stripped of everything ownership carried.
+   Shared by foreclosure and by Rule 14's bankruptcy, which dispose of assets
+   identically -- buildings demolished, policy cancelled, condition reset for
+   the next owner. */
+static void reset_to_bank(Square *s)
+{
+    s->owner              = -1;
+    s->purchasedRound     = -1;
+    s->houses             = 0;
+    s->hotel              = false;
+    s->mortgaged          = false;
+    s->loanLocked         = false;
+    s->damaged            = false;
+    s->structDamaged      = false;
+    s->policy             = INS_NONE;
+    s->policyRounds       = 0;
+    s->conditionPct       = 100;
+    s->unmaintainedRounds = 0;
+    s->depreciationPct    = 0;
+}
+
+static bool owns_any_square(const GameState *g, int p)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* LK 6-7, run immediately after accrue_interest so a loan can default on the
+ * interest that has just compounded -- which, at D4's per-round rate, is
+ * usually how it happens.
+ *
+ * The pledged assets go to the Bank and then straight to auction under
+ * LK 19. The debt is cleared rather than carried: LK 6 treats foreclosure as
+ * settlement in full however little the collateral fetched, and the Bank
+ * wearing the shortfall is what stops a defaulted player being pursued into
+ * a bankruptcy the rule does not call for.
+ *
+ * Collecting the squares before auctioning any of them matters. run_auction
+ * assigns ownership, so a single sweep that auctioned as it went would hand
+ * a square to a new owner and then find it again on a later pass.
+ */
+void check_loan_default(GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        Player *pl = &g->players[i];
+        int     foreclosed[NUM_SQUARES];
+        int     n = 0, k, sq;
+
+        if (pl->bankrupt || !pl->loan.active) {
+            continue;
+        }
+        if (g->round < pl->loan.issuedRound + pl->loan.termRounds) {
+            continue;
+        }
+        if (pl->loan.principal <= 0) {
+            pl->loan.active = false;           /* settled on the last round */
+            unlock_collateral(g, i);
+            continue;
+        }
+
+        printf("%s has defaulted.\n", pl->name);
+        printf("Collateral has been foreclosed.\n");
+        printf("Outstanding debt cleared.\n");
+
+        for (sq = 0; sq < NUM_SQUARES; sq++) {
+            if (g->board[sq].owner == i && g->board[sq].loanLocked) {
+                reset_to_bank(&g->board[sq]);
+                foreclosed[n++] = sq;
+            }
+        }
+
+        pl->loan.active    = false;
+        pl->loan.principal = 0;
+
+        for (k = 0; k < n; k++) {
+            run_auction(g, foreclosed[k], i);  /* LK 19                     */
+        }
+
+        /* LK 7: foreclosure alone does not bankrupt anyone. A player who
+           keeps a property or a rupee plays on; one left with neither has
+           nothing to play with. Milestone step 24 replaces this with
+           declare_bankrupt, which also disposes of what is left. */
+        if (!owns_any_square(g, i) && pl->cash <= 0) {
+            pl->bankrupt = true;
+            printf("%s has been declared bankrupt.\n", pl->name);
+            printf("Remaining assets transferred to the Bank.\n");
+        }
+    }
+}
+
 /* Rule 15's balance sheet:
  *   cash + property + buildings + railway + utility + claims receivable
  *        - loans - accrued interest - taxes due
@@ -289,14 +660,36 @@ int net_worth(const GameState *g, int p)
 
     /* Every held square at market value -- properties, railways and
        utilities alike. Rule 15 lists them separately but sums them, and
-       square_value already knows how to price each type. Buildings are not
-       here yet; they arrive with construction in milestone 3, at book
-       value, and the loan is subtracted there too. */
+       square_value already knows how to price each type. */
     for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].owner == p) {
-            total += square_value(g, i);
+        const Square *s = &g->board[i];
+
+        if (s->owner != p) {
+            continue;
+        }
+        total += square_value(g, i);
+
+        /* Buildings at book value, which Rule 15 counts separately from the
+           land. Read through building_cost rather than the stored field so
+           the book keeps pace with what a building currently costs to put
+           up. A hotel replaced its four houses, so exactly one of these
+           branches contributes. */
+        if (s->hotel) {
+            total += building_cost(g, i, true);
+        } else if (s->houses > 0) {
+            total += building_cost(g, i, false) * s->houses;
         }
     }
+
+    /* Rule 15's liabilities. Accrued interest needs no term of its own:
+       LK 4 compounds it INTO the principal every round, so subtracting the
+       principal subtracts every rupee of interest with it. Taxes due is
+       likewise structurally zero -- both tax squares charge on the spot, so
+       nothing is ever owed between turns -- but the field is subtracted
+       rather than assumed, since milestone 4's regulations may defer one.
+       Claims receivable is permanently 0 by D15. */
+    total -= g->players[p].loan.principal;
+    total -= g->players[p].taxesDue;
 
     return total;
 }

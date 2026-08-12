@@ -157,3 +157,65 @@ int decide_maintenance(GameState *g, int p)
 
     return -1;
 }
+
+/* How close to maturity a loan must be before the placeholder buys time
+   rather than hoping for another Bank landing. */
+#define EXTEND_WITHIN_ROUNDS 5
+
+/* PLACEHOLDER (milestone 6). R1.8 and LK 5: the Bank square offers five
+ * actions and grants exactly one per landing, so this returns the first that
+ * applies and the order below IS the policy.
+ *
+ * Settle before part-paying, part-pay before buying time, buy time before
+ * borrowing more. That ranking is not arbitrary: under D4 the principal
+ * compounds every round at the rate it was issued at, and R1.8 makes this
+ * square the only place it can ever be paid down. A player who passes up a
+ * chance to reduce the balance may not get another for twenty rounds, by
+ * which time 8% per round has multiplied it by four and a half.
+ *
+ * Borrowing is deliberately reactive -- only when cash has fallen below half
+ * the starting stake, and only for the shortfall rather than the maximum.
+ * Taking the LK 2 ceiling on principle is the Risk Taker's move and belongs
+ * in milestone 6; here it would simply bankrupt all four players the same
+ * way at the same time and hide everything else this milestone added.
+ */
+BankAction decide_bank(GameState *g, int p, int *amount)
+{
+    const Player *pl = &g->players[p];
+    int           capacity;
+
+    *amount = 0;
+
+    if (pl->loan.active) {
+        if (pl->cash >= pl->loan.principal) {
+            *amount = pl->loan.principal;
+            return BANK_REPAY_FULL;
+        }
+        if (pl->cash >= pl->loan.principal / 2 && pl->loan.principal > 1) {
+            *amount = pl->loan.principal / 2;
+            return BANK_REPAY_PART;
+        }
+        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+            return BANK_EXTEND;
+        }
+
+        capacity = loan_capacity(g, p);
+        if (capacity > 0 && pl->cash < START_CASH / 4) {
+            *amount = capacity;
+            return BANK_INCREASE;
+        }
+        return BANK_NONE;
+    }
+
+    if (pl->cash < START_CASH / 2) {
+        int shortfall = START_CASH - pl->cash;
+        int cap       = max_loan(g, p);
+
+        if (cap > 0) {
+            *amount = (shortfall < cap) ? shortfall : cap;
+            return BANK_OBTAIN;
+        }
+    }
+
+    return BANK_NONE;
+}

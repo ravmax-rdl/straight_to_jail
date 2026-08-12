@@ -387,6 +387,28 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     }
 }
 
+/* R1.8 and LK 5. One action per landing, and the only route to repayment
+ * there is -- a player who never lands on square 38 inside their term
+ * defaults, which is the clarified rule rather than an oversight.
+ *
+ * Every case is listed and there is no default label, for the same reason
+ * land_on has none: adding a sixth action should break the build here.
+ */
+static void bank_visit(GameState *g, int p)
+{
+    int        amount = 0;
+    BankAction act    = decide_bank(g, p, &amount);
+
+    switch (act) {
+    case BANK_OBTAIN:     grant_loan(g, p, amount);     break;
+    case BANK_REPAY_PART:
+    case BANK_REPAY_FULL: repay_loan(g, p, amount);     break;
+    case BANK_EXTEND:     extend_loan(g, p);            break;
+    case BANK_INCREASE:   increase_loan(g, p, amount);  break;
+    case BANK_NONE:                                     break;
+    }
+}
+
 void land_on(GameState *g, int p, int sq, int diceTotal)
 {
     switch (g->board[sq].type) {
@@ -421,8 +443,11 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         printf("%s was sent to Jail.\n", g->players[p].name);
         break;
 
-    /* Still to come, each in its own step. */
     case SQ_BANK:
+        bank_visit(g, p);
+        break;
+
+    /* Still to come, each in its own step. */
     case SQ_INSURANCE:
     case SQ_EVENT:
         break;
@@ -478,6 +503,84 @@ static bool resolve_jail(GameState *g, int p, int d1, int d2)
     return false;
 }
 
+/* ---------------------------------------------------------- invariants --- */
+
+/* State that must hold after every turn, checked only in the debug build.
+ * Both failures are silent in ordinary play -- they surface as rents and
+ * loan capacities that are merely wrong -- so they are worth catching at the
+ * turn that caused them.
+ *
+ * Rule 9's evenness is NOT here, and the omission is deliberate. See
+ * assert_builds_evenly.
+ */
+#ifdef DEBUG
+static void assert_invariants(const GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].houses > 0 && g->board[i].hotel) {
+            fprintf(stderr, "R%d: square %d holds houses and a hotel (Rule 10)\n",
+                    g->round, i);
+            abort();
+        }
+
+        /* A lock outliving its loan would silently sterilise an asset:
+           eligible_collateral would refuse to pledge it and the D11 ladder
+           would refuse to mortgage it, forever. Both ends that clear a loan
+           unlock, so this catches a third one appearing. */
+        if (g->board[i].loanLocked) {
+            int owner = g->board[i].owner;
+
+            if (owner < 0 || !g->players[owner].loan.active) {
+                fprintf(stderr, "R%d: square %d is loan-locked without a loan (LK 3)\n",
+                        g->round, i);
+                abort();
+            }
+        }
+    }
+}
+
+/* Rule 9, checked where it actually applies: the moment a building is added.
+ *
+ * Deviation from the plan, which states this as a board invariant --
+ * max(houses) - min(houses) <= 1 across every group, asserted each turn. It
+ * cannot be one. Foreclosure demolishes the buildings on the squares a loan
+ * pledged and leaves their groupmates untouched, so LK 6 itself produces a
+ * group standing at 0 and 4; a player who buys the stripped square back at
+ * auction then re-assembles a monopoly that is legitimately five levels
+ * apart, and the builder needs several turns to level it up again. Every one
+ * of those states is one the rules asked for, and the plan's invariant fired
+ * on all of them -- on six of the seven seeds tried.
+ *
+ * The plan's wording is also incompatible with hotels on its own terms: a
+ * hotel stores houses == 0, so a group holding one hotel and two four-house
+ * properties reads max 4, min 0 and fails an invariant it satisfies. That is
+ * why the comparison below is on development_level.
+ *
+ * What Rule 9 does guarantee is that no building is ever ADDED to a square
+ * standing above its group's minimum. That is the property the even-building
+ * rule is really about, it holds without exception, and it is what catches
+ * the failure this guard exists for -- decide_build picking anything other
+ * than the least developed square.
+ */
+static void assert_builds_evenly(const GameState *g, int sq)
+{
+    PropertyGroup grp   = g->board[sq].group;
+    int           level = development_level(g, sq);
+    int           i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && development_level(g, i) < level) {
+            fprintf(stderr,
+                    "R%d: building on square %d at level %d over square %d at level %d (Rule 9)\n",
+                    g->round, sq, level, i, development_level(g, i));
+            abort();
+        }
+    }
+}
+#endif
+
 /* --------------------------------------------------------- construction -- */
 
 /* Rule 3 step 6. Builds until the strategy stops asking, which is what lets
@@ -503,6 +606,10 @@ static void build_step(GameState *g, int p)
         Square *s     = &g->board[sq];
         bool    hotel = (s->houses == MAX_HOUSES);
         int     cost  = building_cost(g, sq, hotel);
+
+#ifdef DEBUG
+        assert_builds_evenly(g, sq);
+#endif
 
         if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
             return;
@@ -565,51 +672,6 @@ static void maintenance_step(GameState *g, int p)
     }
 }
 
-/* ---------------------------------------------------------- invariants --- */
-
-/* Development rules that must hold after every turn, checked only in the
- * debug build. Both failures are silent in ordinary play -- they show up as
- * rents that are merely wrong -- so they are worth asserting where they can
- * be caught at the turn that caused them.
- *
- * Deviation from the plan's wording: the evenness bound is stated there as
- * max(houses) - min(houses) <= 1, which cannot be right once hotels exist.
- * A hotel stores houses == 0, so a group holding one hotel and two
- * four-house properties would read max 4, min 0 and fail an invariant it
- * actually satisfies. The bound is checked on development_level instead,
- * which is the scale Rule 9's "evenly" is really about.
- */
-#ifdef DEBUG
-static void assert_development(const GameState *g)
-{
-    int grp, i;
-
-    for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].houses > 0 && g->board[i].hotel) {
-            fprintf(stderr, "R%d: square %d holds houses and a hotel (Rule 10)\n",
-                    g->round, i);
-            abort();
-        }
-    }
-
-    for (grp = 0; grp < GRP_COUNT; grp++) {
-        int lo = MAX_HOUSES + 1, hi = -1;
-
-        for (i = 0; i < NUM_SQUARES; i++) {
-            if (g->board[i].group == (PropertyGroup)grp) {
-                int level = development_level(g, i);
-                if (level < lo) { lo = level; }
-                if (level > hi) { hi = level; }
-            }
-        }
-        if (hi >= 0 && hi - lo > 1) {
-            fprintf(stderr, "R%d: group %d is developed %d..%d (Rule 9)\n",
-                    g->round, grp, lo, hi);
-            abort();
-        }
-    }
-}
-#endif
 
 /* ------------------------------------------------------------- a turn --- */
 
@@ -638,7 +700,7 @@ void play_turn(GameState *g, int p)
     build_step(g, p);                               /* 6. construction    */
 
 #ifdef DEBUG
-    assert_development(g);
+    assert_invariants(g);
 #endif
 }
 
@@ -660,7 +722,13 @@ void play_round(GameState *g)
     }
 
     /* D13 puts these last and in this order. The economic cadences slot in
-       above them as the milestones introduce them. */
+       between the tick and the summary as the milestones introduce them.
+
+       Interest before the default check is the one ordering that matters:
+       LK 4 compounds first, so a loan defaults on the round its balance
+       finally outgrows its term rather than a round later. */
+    accrue_interest(g);             /* LK 4, D4                            */
+    check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
     round_summary(g);
     market_conditions(g);

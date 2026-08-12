@@ -136,6 +136,14 @@ typedef enum {
     SCOPE_GLOBAL, SCOPE_GROUP, SCOPE_REGION, SCOPE_SQUARE, SCOPE_PLAYER
 } EffectScope;
 
+/* LK 5's five loan actions, plus doing nothing. R1.8 allows exactly one per
+   landing on the Bank square, which is what makes this an enum rather than a
+   set of flags: decide_bank picks one and game.c performs it. */
+typedef enum {
+    BANK_NONE, BANK_OBTAIN, BANK_REPAY_PART, BANK_REPAY_FULL,
+    BANK_EXTEND, BANK_INCREASE
+} BankAction;
+
 /* D14 region tags. A bitmask rather than an enum because a square belongs to
    several regions at once -- Trincomalee is northern, eastern and coastal. */
 #define REGION_WESTERN          0x01u
@@ -319,6 +327,21 @@ void run_auction(GameState *g, int sq, int anchorPlayer);
 void pay_income_tax(GameState *g, int p);
 void pay_community_fund(GameState *g, int p);
 
+/* finance.c -- loans (LK 1-7, D4, D5, D22). loan_capacity is the 75% LTV of
+   collateral still free to pledge; max_loan is the same figure gated by
+   LK 5's one-loan-at-a-time rule, which is why the increase action reads the
+   former. accrue_interest and check_loan_default run once per round in that
+   order (D13), so a loan can default on the interest it has just accrued. */
+bool eligible_collateral(const GameState *g, int p, int sq);
+int  loan_capacity(const GameState *g, int p);
+int  max_loan(const GameState *g, int p);
+void grant_loan(GameState *g, int p, int amount);
+void increase_loan(GameState *g, int p, int extra);
+void extend_loan(GameState *g, int p);
+void repay_loan(GameState *g, int p, int amount);
+void accrue_interest(GameState *g);
+void check_loan_default(GameState *g);
+
 /* board.c -- randomness. Seeded once in main; every random draw in the
    program goes through rng_range so the bias fix applies everywhere. */
 int rng_range(int lo, int hi);
@@ -367,6 +390,10 @@ bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
 int  decide_build(GameState *g, int p);
 int  decide_maintenance(GameState *g, int p);
+
+/* decide_bank returns the one LK 5 action to take on this landing (R1.8),
+   writing the sum involved to *amount for the three that need one. */
+BankAction decide_bank(GameState *g, int p, int *amount);
 
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);
