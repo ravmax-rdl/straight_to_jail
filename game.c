@@ -741,6 +741,13 @@ void play_round(GameState *g)
     tick_effects(g);                /* D12, LK 35                          */
     tick_cooldowns(g);              /* LK 33                               */
 
+    /* The cadenced systems, in D13's order. Each fires on its own clock and
+       none of them knows about the others -- the registry is what lets them
+       compose without a line of coordination here. */
+    if (g->round % INFLATION_EVERY == 0) {
+        draw_inflation(g);          /* LK 12-14                            */
+    }
+
     round_summary(g);
     market_conditions(g);
 }

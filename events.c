@@ -168,3 +168,59 @@ void tick_cooldowns(GameState *g)
         }
     }
 }
+
+/* ------------------------------------------------------------- inflation -- */
+
+/* LK 12's six outcomes, drawn uniformly. A table rather than a formula
+   because the set is not an interval -- it skips 1, 3, 4 and everything
+   between 8 and 12 -- and because it can be checked against the rule by eye. */
+static const int INFLATION_DRAWS[] = { -3, 0, 2, 5, 8, 12 };
+#define INFLATION_DRAW_COUNT ((int)(sizeof INFLATION_DRAWS / sizeof INFLATION_DRAWS[0]))
+
+/* LK 12-14 and D12's permanent half.
+ *
+ * This is the one system in the file that does NOT push a record. LK 14 says
+ * the new value replaces the old, so inflation is written into the stored
+ * fields and the registry never hears about it -- which is also what makes it
+ * compound correctly across draws, since each one scales what the last one
+ * left rather than being one more term in a sum.
+ *
+ * Premiums, repair costs, maintenance and both tax bases need no handling
+ * here. They are all derived from square_value and building_cost, so they
+ * inflate the moment their inputs do. That is the choke-point pattern paying
+ * for itself; the alternative is five more lines here and a sixth forgotten.
+ */
+void draw_inflation(GameState *g)
+{
+    int pct = INFLATION_DRAWS[rng_range(0, INFLATION_DRAW_COUNT - 1)];
+    int i;
+
+    g->econ.inflationPct = pct;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        Square *s = &g->board[i];
+
+        /* The 18 non-property squares carry zeros in every one of these and
+           stay at zero, so no type test is needed. Railways and utilities
+           have a price and a mortgage value and correctly move with them. */
+        s->price         = apply_pct(s->price, pct);
+        s->baseRent      = apply_pct(s->baseRent, pct);
+        s->houseCost     = apply_pct(s->houseCost, pct);
+        s->hotelCost     = apply_pct(s->hotelCost, pct);
+        s->mortgageValue = apply_pct(s->mortgageValue, pct);
+    }
+
+    /* D21 and D2'. Both economy-wide rates move by the same factor. The loan
+       rate governs NEW loans only -- every live loan froze its own ratePct at
+       issue under LK 13, and the fact that this line cannot reach it is the
+       whole reason Loan owns that field. This is the most commonly
+       mis-implemented rule in the spec, and here it is correct by
+       construction rather than by remembering. */
+    g->econ.interestRatePct = apply_pct(g->econ.interestRatePct, pct);
+    g->econ.incomeTaxPct    = apply_pct(g->econ.incomeTaxPct, pct);
+
+    /* Section 5 gives no template; this matches the economic-event voice of
+       its neighbours. */
+    printf("Inflation Rate : %+d%%\n", pct);
+    printf("All property values, costs and rents have been recalculated.\n");
+}

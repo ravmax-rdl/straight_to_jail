@@ -416,6 +416,11 @@ int  effect_modifier(const GameState *g, EffectKind kind, int square, int player
 void tick_effects(GameState *g);
 void tick_cooldowns(GameState *g);
 
+/* events.c -- the cadenced systems (D13). draw_inflation is the only one that
+   mutates stored values instead of pushing a record, because LK 14 makes it
+   permanent (D12). */
+void draw_inflation(GameState *g);
+
 /* players.c -- the decision engines. Placeholder bodies until milestone 6;
    the signatures are final, so that milestone touches players.c and no other
    file. decide_bid returns the amount to bid or 0 to withdraw permanently;
