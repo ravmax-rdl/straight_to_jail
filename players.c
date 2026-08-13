@@ -461,6 +461,23 @@ static bool is_group_minimum(const GameState *g, int sq)
     return true;
 }
 
+/* The mirror of is_group_minimum, for selling. Buildings must come down from
+   the top of a group for the same reason they go up from the bottom: Rule 9's
+   evenness is a property of the group, not of the direction of travel. */
+static bool is_group_maximum(const GameState *g, int sq)
+{
+    PropertyGroup grp   = g->board[sq].group;
+    int           level = development_level(g, sq);
+    int           i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && development_level(g, i) > level) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /* Given two legal candidates, does this personality prefer the newer one?
  *
  * Rule 9 fixes which square within a group may be built on; it says nothing
@@ -831,4 +848,79 @@ BankAction decide_bank(GameState *g, int p, int *amount)
         return bank_opportunist(g, p, amount);
     }
     return BANK_NONE;
+}
+
+/* ---------------------------------------------------------- liquidation -- */
+
+/* Rule 3 step 7: which square to sell one level of development from, or -1
+ * to sell nothing.
+ *
+ * Two section 3 bullets describe selling as a deliberate repositioning rather
+ * than a forced one -- the Risk Taker's "sells cheap assets to fund premium
+ * ones" and the Opportunistic Trader's "sells ahead of declines". Both are
+ * priced at D11's 50% of construction cost, which is the only figure the spec
+ * states for disposing of anything; a voluntary sale that invented its own
+ * price would be a new rule rather than an implementation of an old one.
+ *
+ * Buildings come down from the top of a group for the same reason they go up
+ * from the bottom: Rule 9's evenness does not care which way the traffic is
+ * moving, and game.c's DEBUG guard would catch a group left two levels apart
+ * the next time anyone built on it.
+ */
+int decide_liquidate(GameState *g, int p)
+{
+    int i, best = -1, bestValue = 0;
+
+    switch (g->players[p].strat) {
+    case STRAT_AGGRESSIVE:
+    case STRAT_CONSERVATIVE:
+        /* R4.1: never sells voluntarily. R4.2 has no selling bullet at all,
+           and a personality defined by its reserve has no reason to raise
+           cash at half price. */
+        return -1;
+
+    case STRAT_RISKTAKER:
+        /* R4.3: sells cheap assets to fund premium ones -- so it only sells
+           when there is something premium waiting, and it takes the cheapest
+           developed square it holds. */
+        if (development_shortfall(g, p) <= g->players[p].cash) {
+            return -1;
+        }
+        for (i = 0; i < NUM_SQUARES; i++) {
+            int value;
+
+            if (g->board[i].owner != p || development_level(g, i) == 0) {
+                continue;
+            }
+            if (!is_group_maximum(g, i)) {
+                continue;
+            }
+            value = square_value(g, i);
+            if (best < 0 || value < bestValue) {
+                best      = i;
+                bestValue = value;
+            }
+        }
+        return best;
+
+    case STRAT_OPPORTUNIST:
+        /* R4.4: sells ahead of declines. A negative VALUE_MUL reaching the
+           square is the market saying so, and LK 31-32 give a decline ten
+           rounds to run -- long enough that standing buildings on it are
+           earning less than their sale price would. */
+        for (i = 0; i < NUM_SQUARES; i++) {
+            if (g->board[i].owner != p || development_level(g, i) == 0) {
+                continue;
+            }
+            if (effect_modifier(g, EFF_VALUE_MUL, i, p) >= 0) {
+                continue;
+            }
+            if (is_group_maximum(g, i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    return -1;
 }

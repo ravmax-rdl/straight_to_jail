@@ -753,6 +753,26 @@ static void build_step(GameState *g, int p)
     }
 }
 
+/* --------------------------------------------------------- liquidation -- */
+
+/* Rule 3 step 7. Two of the four personalities sell to reposition rather than
+ * because they have been forced to (R4.3, R4.4); the other two never do.
+ *
+ * One level per turn, deliberately. Selling realises half of what the
+ * building cost, so a strategy that unwound a whole portfolio in one turn
+ * would destroy more value than any repositioning could recover. Once a turn
+ * is also enough for the decision to be revisited as the market moves, which
+ * is the point of selling ahead of a decline.
+ */
+static void liquidate_step(GameState *g, int p)
+{
+    int sq = decide_liquidate(g, p);
+
+    if (sq >= 0) {
+        sell_one_building(g, p, sq);
+    }
+}
+
 /* --------------------------------------------------------- maintenance -- */
 
 /* Rule 3 step 1 and LK 27. The rule is emphatic that maintenance happens
@@ -816,6 +836,7 @@ void play_turn(GameState *g, int p)
     move_player(g, p, total);                       /* 3. move clockwise  */
     land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
     build_step(g, p);                               /* 6. construction    */
+    liquidate_step(g, p);                           /* 7. financial       */
 
 #ifdef DEBUG
     assert_invariants(g);

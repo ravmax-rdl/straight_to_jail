@@ -362,6 +362,11 @@ const char *insurance_name(InsuranceType tier);
 bool raise_funds(GameState *g, int p, int needed);
 void declare_bankrupt(GameState *g, int p, int creditor);
 
+/* finance.c -- one level of development sold back at D11's 50%. Used by the
+   recovery ladder and, deliberately, by the two section 3 personalities that
+   sell to reposition (R4.3, R4.4). */
+void sell_one_building(GameState *g, int p, int sq);
+
 /* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
    assets), so deliberately two functions rather than one parameterised. */
 int  total_assets(const GameState *g, int p);
@@ -483,6 +488,7 @@ int  decide_build(GameState *g, int p);
 int  decide_maintenance(GameState *g, int p);
 int  decide_insurance(GameState *g, int p, InsuranceType *tier);
 bool decide_renovate(GameState *g, int p, int sq);
+int  decide_liquidate(GameState *g, int p);
 
 /* decide_bank returns the one LK 5 action to take on this landing (R1.8),
    writing the sum involved to *amount for the three that need one. */

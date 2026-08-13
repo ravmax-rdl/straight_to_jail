@@ -798,13 +798,19 @@ static int demolition_refund(const GameState *g, int sq)
 
 /* Sell exactly one level of development, the reverse of one build_step pass.
  *
+ * Public because R4.3 and R4.4 both describe selling as a deliberate act
+ * rather than a forced one, and this is the only price the spec states for
+ * disposing of anything: D11's 50% of construction cost. A voluntary sale
+ * that invented its own figure would be a new rule; this one is the ladder's
+ * own rung, used on purpose.
+ *
  * A hotel goes back to the four houses it replaced rather than to bare land,
  * which is Rule 10 read backwards and keeps the refund honest: the owner paid
  * four house costs and then a hotel cost, so unwinding in the same two stages
  * returns half of each. Dropping straight to zero would refund half a hotel
  * for buildings worth a hotel plus four houses.
  */
-static void sell_one_building(GameState *g, int p, int sq)
+void sell_one_building(GameState *g, int p, int sq)
 {
     char    b[FMT_BUF];
     Square *s      = &g->board[sq];
