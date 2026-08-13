@@ -266,13 +266,33 @@ void round_summary(const GameState *g)
  */
 void market_conditions(const GameState *g)
 {
+    int grp, left;
+
     rule_line('=', MARKET_RULE);
     printf("Current Market Conditions\n");
     rule_line('=', MARKET_RULE);
     printf("\n");
 
-    /* Market Boom, Market Decline and Regional Development arrive with the
-       effect registry in milestone 4. */
+    /* A section with nothing active prints nothing at all -- header, rule and
+       body together. LK 36 reports what is in force, and an empty heading
+       reports the absence of something rather than the presence of nothing. */
+    grp = boom_group(g, &left);
+    if (grp != GRP_NONE) {
+        printf("Market Boom\n");
+        rule_line('-', 13);
+        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("\n");
+    }
+
+    grp = decline_group(g, &left);
+    if (grp != GRP_NONE) {
+        printf("Market Decline\n");
+        rule_line('-', 16);
+        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("\n");
+    }
+
+    /* Regional Development arrives with the Table 4 cards. */
 
     printf("Inflation\n");
     rule_line('-', 12);
@@ -746,6 +766,9 @@ void play_round(GameState *g)
        compose without a line of coordination here. */
     if (g->round % INFLATION_EVERY == 0) {
         draw_inflation(g);          /* LK 12-14                            */
+    }
+    if (g->round % MARKET_EVERY == 0) {
+        market_review(g);           /* LK 30-33                            */
     }
 
     round_summary(g);

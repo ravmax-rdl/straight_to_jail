@@ -389,6 +389,7 @@ bool is_purchasable(const GameState *g, int sq);
 int  count_owned(const GameState *g, int p, SquareType type);
 bool group_monopoly(const GameState *g, int p, PropertyGroup grp);
 int  development_level(const GameState *g, int sq);
+const char *group_name(PropertyGroup grp);
 
 /* board.c -- the choke points. Every timed modifier in the game is read in
    one of these four and nowhere else. square_value is built on the
@@ -420,6 +421,13 @@ void tick_cooldowns(GameState *g);
    mutates stored values instead of pushing a record, because LK 14 makes it
    permanent (D12). */
 void draw_inflation(GameState *g);
+void market_review(GameState *g);
+
+/* events.c -- LK 36 block queries. game.c owns every formatted block, so
+   these answer rather than print. Both read the live registry, so there is no
+   second copy of what is active to drift from it. GRP_NONE = nothing. */
+int boom_group(const GameState *g, int *roundsLeft);
+int decline_group(const GameState *g, int *roundsLeft);
 
 /* players.c -- the decision engines. Placeholder bodies until milestone 6;
    the signatures are final, so that milestone touches players.c and no other

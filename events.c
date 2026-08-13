@@ -224,3 +224,140 @@ void draw_inflation(GameState *g)
     printf("Inflation Rate : %+d%%\n", pct);
     printf("All property values, costs and rents have been recalculated.\n");
 }
+
+/* -------------------------------------------------- booms and declines -- */
+
+/* LK 31 and LK 32, as effect specifications rather than code.
+ *
+ * LK 31 lists "+15% purchase prices" separately from "+20% property values".
+ * In this model those are the same number -- a buyer pays square_value, which
+ * is what VALUE_MUL scales -- so the two collapse into one record. Listing
+ * both would double the effect on the one figure they describe.
+ */
+static const struct { EffectKind kind; int pct; } BOOM_EFFECTS[] = {
+    { EFF_VALUE_MUL,    +20 },
+    { EFF_RENT_MUL,     +25 },
+    { EFF_MORTGAGE_MUL, +15 },
+    { EFF_BUILD_COST_MUL, +10 }
+};
+#define BOOM_EFFECT_COUNT ((int)(sizeof BOOM_EFFECTS / sizeof BOOM_EFFECTS[0]))
+
+static const struct { EffectKind kind; int pct; } DECLINE_EFFECTS[] = {
+    { EFF_VALUE_MUL,        -15 },
+    { EFF_RENT_MUL,         -20 },
+    { EFF_MORTGAGE_MUL,     -10 },
+    { EFF_AUCTION_OPEN_MUL, -25 }
+};
+#define DECLINE_EFFECT_COUNT ((int)(sizeof DECLINE_EFFECTS / sizeof DECLINE_EFFECTS[0]))
+
+/* Pick a group that LK 33's cooldown allows, that LK 30 did not give this
+ * same treatment last review, and that is not already spoken for this review.
+ * Returns GRP_NONE when nothing qualifies, which is a real outcome rather
+ * than an error: with eight groups and a thirty-round bar on a ten-round
+ * cadence, the eligible set genuinely empties from time to time.
+ *
+ * Reservoir choice over one pass rather than building a candidate array: the
+ * nth qualifying group replaces the running pick with probability 1/n, which
+ * leaves every candidate equally likely without a second loop or a count.
+ */
+static PropertyGroup pick_group(GameState *g, PropertyGroup avoidRepeat,
+                                PropertyGroup alreadyTaken)
+{
+    PropertyGroup pick = GRP_NONE;
+    int           seen = 0, i;
+
+    for (i = 0; i < GRP_COUNT; i++) {
+        PropertyGroup grp = (PropertyGroup)i;
+
+        if (g->econ.groupCooldown[i] > 0) {
+            continue;                       /* LK 33                        */
+        }
+        if (grp == avoidRepeat || grp == alreadyTaken) {
+            continue;                       /* LK 30                        */
+        }
+        seen++;
+        if (rng_range(1, seen) == 1) {
+            pick = grp;
+        }
+    }
+
+    return pick;
+}
+
+/* LK 30-33, every ten rounds: one group rises, another falls, for ten rounds
+ * each. Both are barred from re-selection for thirty (LK 33) and neither may
+ * repeat the same treatment it had last time (LK 30).
+ *
+ * lastBoomGroup and lastDeclineGroup are read before they are written, which
+ * is what makes the LK 30 test mean "last review" rather than "this one".
+ * They start at GRP_NONE, which is -1 and matches no group, so the first
+ * review is unconstrained without needing a special case.
+ */
+void market_review(GameState *g)
+{
+    PropertyGroup boom    = pick_group(g, g->econ.lastBoomGroup, GRP_NONE);
+    PropertyGroup decline = pick_group(g, g->econ.lastDeclineGroup, boom);
+    int           i;
+
+    if (boom != GRP_NONE) {
+        for (i = 0; i < BOOM_EFFECT_COUNT; i++) {
+            effect_push(g, BOOM_EFFECTS[i].kind, SCOPE_GROUP, (int)boom,
+                        BOOM_EFFECTS[i].pct, -1, MARKET_ROUNDS);
+        }
+        g->econ.groupCooldown[boom] = MARKET_COOLDOWN;
+    }
+
+    if (decline != GRP_NONE) {
+        for (i = 0; i < DECLINE_EFFECT_COUNT; i++) {
+            effect_push(g, DECLINE_EFFECTS[i].kind, SCOPE_GROUP, (int)decline,
+                        DECLINE_EFFECTS[i].pct, -1, MARKET_ROUNDS);
+        }
+        g->econ.groupCooldown[decline] = MARKET_COOLDOWN;
+    }
+
+    g->econ.lastBoomGroup    = boom;
+    g->econ.lastDeclineGroup = decline;
+}
+
+/* ------------------------------------------------- LK 36 block queries -- */
+/*
+ * game.c owns every block of formatted output, so these answer questions
+ * rather than printing. The answers come out of the live registry rather than
+ * a set of fields kept alongside it -- there is exactly one place a boom is
+ * recorded, so there is no second copy to drift.
+ *
+ * A SCOPE_GROUP value effect can only have come from a market review: the
+ * regional cards scope by square or region and the national events are global
+ * or regional, so the sign of the magnitude distinguishes a boom from a
+ * decline unambiguously.
+ */
+static int market_group(const GameState *g, bool boom, int *roundsLeft)
+{
+    int i;
+
+    for (i = 0; i < g->econ.effectCount; i++) {
+        const Effect *e = &g->econ.effects[i];
+
+        if (e->kind != EFF_VALUE_MUL || e->scopeKind != SCOPE_GROUP) {
+            continue;
+        }
+        if ((e->magnitudePct > 0) != boom) {
+            continue;
+        }
+        *roundsLeft = e->roundsLeft;
+        return e->scope;
+    }
+
+    *roundsLeft = 0;
+    return GRP_NONE;
+}
+
+int boom_group(const GameState *g, int *roundsLeft)
+{
+    return market_group(g, true, roundsLeft);
+}
+
+int decline_group(const GameState *g, int *roundsLeft)
+{
+    return market_group(g, false, roundsLeft);
+}

@@ -500,6 +500,17 @@ int count_owned(const GameState *g, int p, SquareType type)
     return n;
 }
 
+/* The colour group's printable name, for the LK 36 block. The table already
+   exists to validate the CSV's group column; exposing a reader is cheaper and
+   safer than a second copy of the eight names in game.c. */
+const char *group_name(PropertyGroup grp)
+{
+    if (grp <= GRP_NONE || grp >= GRP_COUNT) {
+        return "None";
+    }
+    return GROUP_NAMES[grp];
+}
+
 /* Rule 8: p holds every square of the colour group, which is the only thing
  * that permits construction.
  *
