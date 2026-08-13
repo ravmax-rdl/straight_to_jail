@@ -205,6 +205,15 @@ bool decide_renovate(GameState *g, int p, int sq)
     if (s->owner != p || s->type != SQ_PROPERTY) {
         return false;
     }
+
+    /* LK 29 first. Structural damage is the worse of the two -- it costs
+       value, rent and upkeep all at once, where depreciation costs only
+       value -- so it is worth clearing before the wear is, and at a
+       different price against a different base. */
+    if (s->structDamaged) {
+        return g->players[p].cash >= structural_renovation_cost(g, sq);
+    }
+
     if (s->depreciationPct <= RENOVATE_ABOVE_PCT) {
         return false;
     }

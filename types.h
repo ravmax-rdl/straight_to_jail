@@ -188,6 +188,10 @@ typedef enum {
 #define DEPREC_EVERY         5   /* LK 16: one point per five rounds         */
 #define RENOVATE_PCT        10   /* LK 17: of current market value           */
 #define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
+#define STRUCT_VALUE_PCT   -15   /* LK 28: value penalty                     */
+#define STRUCT_RENT_PCT     75   /* LK 28: max rent, i.e. -25%               */
+#define STRUCT_MAINT_PCT    50   /* LK 28: upkeep costs half again           */
+#define STRUCT_RENOVATE_PCT 25   /* LK 29: of replacement value              */
 #define MARKET_COOLDOWN     30   /* LK 33                                    */
 #define DECK_SIZE           20   /* App A                                    */
 
@@ -427,6 +431,7 @@ int  repair_cost(const GameState *g, int sq);
 /* board.c -- ageing (LK 16-17). depreciation_tick runs on the five-round
    cadence; the percentage it accumulates is read inside square_value. */
 void depreciation_tick(GameState *g);
+int  structural_renovation_cost(const GameState *g, int sq);
 
 /* events.c -- the effect registry (D12). effect_modifier is the read side,
    consulted by all four choke points and by the two economy-wide rates;

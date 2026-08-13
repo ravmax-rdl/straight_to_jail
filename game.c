@@ -400,6 +400,26 @@ static void renovate_step(GameState *g, int p, int sq)
         return;
     }
 
+    /* LK 29's rebuild and LK 17's renovation are different jobs at different
+       prices, and decide_renovate already ranked them: structural damage is
+       the worse of the two, so a square carrying it gets rebuilt first. */
+    if (s->structDamaged) {
+        cost = structural_renovation_cost(g, sq);
+        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+            return;
+        }
+
+        /* LK 29 restores value, rent and condition together, which is three
+           fields because the three penalties are read in three places. */
+        s->structDamaged      = false;
+        s->conditionPct       = 100;
+        s->unmaintainedRounds = 0;
+
+        printf("%s rebuilt %s.\n", g->players[p].name, s->name);
+        printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
+        return;
+    }
+
     cost = pct_of(square_value(g, sq), RENOVATE_PCT);
     if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
         return;

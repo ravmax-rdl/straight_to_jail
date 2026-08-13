@@ -610,7 +610,32 @@ int square_value(const GameState *g, int sq)
        depreciated property rather than the property it used to be. */
     int           value = apply_pct(s->price, -s->depreciationPct);
 
+    /* LK 28's first consequence, and for the same reason it sits here rather
+       than after the market: neglect is damage to the asset, not a change in
+       what the market will pay for a sound one. */
+    if (s->structDamaged) {
+        value = apply_pct(value, STRUCT_VALUE_PCT);
+    }
+
     return apply_pct(value, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
+}
+
+/* LK 29: what it costs to undo structural damage -- a quarter of what the
+ * buildings on the square would cost to replace.
+ *
+ * A different base from LK 17's ordinary renovation, which is a tenth of the
+ * property's market VALUE. That is the distinction the two rules draw:
+ * ordinary renovation buys back the wear on an asset, while this one rebuilds
+ * the fabric, so it is priced off construction rather than off the market.
+ */
+int structural_renovation_cost(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    if (s->hotel) {
+        return pct_of(building_cost(g, sq, true), STRUCT_RENOVATE_PCT);
+    }
+    return pct_of(building_cost(g, sq, false) * s->houses, STRUCT_RENOVATE_PCT);
 }
 
 /* LK 16, on the five-round cadence. One percentage point per tick once a
@@ -692,11 +717,22 @@ int building_cost(const GameState *g, int sq, bool hotel)
 int maintenance_cost(const GameState *g, int sq)
 {
     const Square *s = &g->board[sq];
+    int           cost;
 
     if (s->hotel) {
-        return pct_of(building_cost(g, sq, true), MAINT_HOTEL_PCT);
+        cost = pct_of(building_cost(g, sq, true), MAINT_HOTEL_PCT);
+    } else {
+        cost = pct_of(building_cost(g, sq, false) * s->houses, MAINT_HOUSE_PCT);
     }
-    return pct_of(building_cost(g, sq, false) * s->houses, MAINT_HOUSE_PCT);
+
+    /* LK 28's third consequence: neglect makes future upkeep dearer, which
+       is the trap the rule is describing -- the longer a building is left,
+       the more it costs to start looking after it again. */
+    if (s->structDamaged) {
+        cost = apply_pct(cost, STRUCT_MAINT_PCT);
+    }
+
+    return cost;
 }
 
 /* D1: what it costs to put right the buildings standing on a square -- half
@@ -761,6 +797,14 @@ void condition_tick(GameState *g)
             s->conditionPct = 0;
         }
         s->unmaintainedRounds++;
+
+        /* LK 28. Announced once, on the round the limit is passed -- the
+           counter goes on climbing afterwards, so testing it without the
+           flag would reprint this every round for the rest of the game. */
+        if (s->unmaintainedRounds > UNMAINTAINED_LIMIT && !s->structDamaged) {
+            s->structDamaged = true;
+            printf("Structural damage has occurred at %s.\n", s->name);
+        }
     }
 }
 
@@ -818,6 +862,12 @@ int square_rent(const GameState *g, int sq, int diceTotal)
            were maintained. */
         if (development_level(g, sq) > 0) {
             rent = pct_of(rent, condition_rent_pct(s->conditionPct));
+        }
+        /* LK 28's second consequence, a cap on what the building can earn,
+           applied after the condition band because both describe the same
+           building and LK 28's is the harder ceiling of the two. */
+        if (s->structDamaged) {
+            rent = pct_of(rent, STRUCT_RENT_PCT);
         }
         return apply_pct(rent, effect_modifier(g, EFF_RENT_MUL, sq, s->owner));
 
