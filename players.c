@@ -46,7 +46,7 @@ static const Profile PROFILE[] = {
     /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
     /* STRAT_CONSERVATIVE */ {  90, 90, 10, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
     /* STRAT_RISKTAKER    */ { 999, 25, 30, true,  true,  INS_BASIC, INS_COMPREHENSIVE },
-    /* STRAT_OPPORTUNIST  */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC }
+    /* STRAT_OPPORTUNIST  */ { 100, 75, 15, true,  false, INS_NONE,  INS_COMPREHENSIVE }
 };
 
 static const Profile *profile(const GameState *g, int p)
@@ -135,23 +135,73 @@ static bool rent_still_payable(const GameState *g, int p)
     return false;
 }
 
+/* What it would cost p to raise every square of every monopoly it holds by
+ * one level.
+ *
+ * R4.1 borrows "whenever the funds raise projected rent", and under Rule 8
+ * that is the only condition in which borrowed money can raise rent at all --
+ * so this figure is both the test (is it greater than zero) and the amount.
+ * Borrowing the LK 2 ceiling instead would be a different bullet from a
+ * different personality, and under D4's per-round compounding it is fatal:
+ * with the maximum drawn on every monopoly, the Aggressive Investor went
+ * bankrupt on all five plan seeds.
+ */
+static int development_shortfall(const GameState *g, int p)
+{
+    int i, needed = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s     = &g->board[i];
+        int           level;
+
+        if (s->type != SQ_PROPERTY || s->owner != p) {
+            continue;
+        }
+        if (!group_developable(g, p, s->group)) {
+            continue;
+        }
+        level = development_level(g, i);
+        if (level > MAX_HOUSES) {
+            continue;                            /* already a hotel         */
+        }
+        needed += building_cost(g, i, level == MAX_HOUSES);
+    }
+
+    return needed;
+}
+
 /* ------------------------------------------------------------- purchase -- */
 
-/* Rule 5's choice: take it at the asking price, or decline and send it to
- * auction. The rules have already had their say by the time this is called;
- * what is left is whether this personality wants it at that price.
- */
 /* R4.1. Buys whatever it can afford for as long as anyone is left to charge
- * rent to, and spends down to nothing to do it.
+ * rent to -- but finishes what it started first.
  *
- * completes_group and the two coveted squares do not appear as a separate
- * branch because they cannot change the answer: this arm already says yes to
- * everything affordable. They earn their keep in the auction, where there is
- * a ceiling to raise.
+ * "Completes groups first" outranks "always buys" in the bullet list, and
+ * that ordering is load-bearing rather than decorative. Spending down to
+ * nothing on every square it lands on leaves a monopoly stuck at four houses
+ * with no cash for the hotel: across the five plan seeds this personality
+ * built 98 houses and not one hotel, while the Conservative Banker's 50%
+ * reserve let it finish five. So a purchase that would leave the outstanding
+ * development unfunded is declined -- which sends the square to auction,
+ * where this player is still the highest bidder on anything it actually
+ * wants.
+ *
+ * The exception is a square that completes a group. That is the one purchase
+ * which creates more development than it defers, so it is never declined on
+ * these grounds.
  */
 static bool buy_aggressive(GameState *g, int p, int sq)
 {
-    return rent_still_payable(g, p) && g->players[p].cash >= square_value(g, sq);
+    int price = square_value(g, sq);
+    int cash  = g->players[p].cash;
+
+    if (!rent_still_payable(g, p) || cash < price) {
+        return false;
+    }
+    if (completes_group(g, p, sq)) {
+        return true;
+    }
+
+    return cash - price >= development_shortfall(g, p);
 }
 
 /* R4.2. Buys out of surplus rather than out of capital, and stops buying
@@ -186,6 +236,55 @@ static bool buy_conservative(GameState *g, int p, int sq)
     return cash - price >= cash / 2;
 }
 
+/* D9's projected appreciation: the square's value scaled by the net of every
+ * modifier currently reaching it.
+ *
+ * The decision reads straight off effect_modifier rather than out of a
+ * forecast of its own, which is what makes it a genuinely different way of
+ * valuing the board -- this player buys what the economy is already lifting,
+ * where the Aggressive Investor buys what completes a group.
+ */
+static int projected_appreciation(const GameState *g, int p, int sq)
+{
+    int net = effect_modifier(g, EFF_VALUE_MUL, sq, p)
+            + effect_modifier(g, EFF_RENT_MUL, sq, p);
+
+    return pct_of(square_value(g, sq), net);
+}
+
+/* R4.4. Buys only what the market is already rewarding, and would rather
+ * wait for the auction than pay the asking price.
+ *
+ * D9 sets the bar at the group's construction cost: an appreciation smaller
+ * than one house is not worth the capital, because the same money spent on a
+ * group it already holds would earn more. Railways and utilities have no
+ * house cost, so the bar for them is the one thing they can be compared
+ * against -- their own mortgage value, the sum the board itself says they
+ * are worth as security.
+ */
+static bool buy_opportunist(GameState *g, int p, int sq)
+{
+    int bar;
+
+    if (g->players[p].cash < square_value(g, sq)) {
+        return false;
+    }
+
+    bar = (g->board[sq].type == SQ_PROPERTY)
+          ? building_cost(g, sq, false)
+          : mortgage_value(g, sq);
+
+    /* R4.4: prefers discounted auctions. Declining sends the square straight
+       to auction under Rule 5, where LK 19 opens it at half of market value
+       -- so a refusal here is not a decision to go without, it is a decision
+       to bid for the same square at a discount. */
+    return projected_appreciation(g, p, sq) > bar;
+}
+
+/* Rule 5's choice: take it at the asking price, or decline and send it to
+ * auction. The rules have already had their say by the time this is called;
+ * what is left is whether this personality wants it at that price.
+ */
 static bool wants_to_buy(GameState *g, int p, int sq)
 {
     switch (g->players[p].strat) {
@@ -202,7 +301,7 @@ static bool wants_to_buy(GameState *g, int p, int sq)
         return g->players[p].cash >= square_value(g, sq);
 
     case STRAT_OPPORTUNIST:
-        return g->players[p].cash >= square_value(g, sq);
+        return buy_opportunist(g, p, sq);
     }
     return false;
 }
@@ -267,8 +366,18 @@ static int bid_ceiling(GameState *g, int p, int sq)
            cannot bid money it does not have. */
         break;
 
-    case STRAT_CONSERVATIVE:
     case STRAT_OPPORTUNIST:
+        /* R4.4: prefers discounted auctions, and the ceiling is what makes
+           that a preference rather than a slogan. Its direct-purchase test
+           is the strictest on the board, so the auction -- opened by LK 19
+           at half of market value -- is how this player expects to acquire
+           anything at all. A ceiling below market would lose every contested
+           auction to the Aggressive Investor and leave it with nothing to be
+           balanced about; market value is the point past which a discount is
+           no longer a discount. */
+        break;
+
+    case STRAT_CONSERVATIVE:
         break;
     }
 
@@ -315,15 +424,72 @@ static bool wants_to_build(GameState *g, int p, int sq, bool hotel)
     case STRAT_AGGRESSIVE:
     case STRAT_CONSERVATIVE:
     case STRAT_RISKTAKER:
-    case STRAT_OPPORTUNIST:
         return true;
+
+    case STRAT_OPPORTUNIST:
+        /* R4.4: accelerates under a housing subsidy, delays while inflation
+           is positive. Checked in that order, because a subsidy is a
+           standing discount on this exact purchase while inflation is a
+           reason to wait for one -- when both hold, the discount is already
+           in hand and the reason to wait has gone. */
+        if (effect_modifier(g, EFF_BUILD_COST_MUL, sq, p) < 0) {
+            return true;
+        }
+        return g->econ.inflationPct <= 0;
+    }
+    return false;
+}
+
+/* Rule 9, and the only part of the selection that is a rule: is this square
+ * at its own group's minimum development?
+ *
+ * Building anywhere else would put it two levels clear of a groupmate, which
+ * is what "evenly" forbids. game.c's DEBUG guard asserts exactly this, so a
+ * personality that got it wrong would abort rather than quietly cheat.
+ */
+static bool is_group_minimum(const GameState *g, int sq)
+{
+    PropertyGroup grp   = g->board[sq].group;
+    int           level = development_level(g, sq);
+    int           i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && development_level(g, i) < level) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Given two legal candidates, does this personality prefer the newer one?
+ *
+ * Rule 9 fixes which square within a group may be built on; it says nothing
+ * about which GROUP to push, and that gap is a real strategic choice. Pushing
+ * the least developed group spreads houses across the board and reaches
+ * hotels last; pushing the most developed finishes one group and starts
+ * collecting hotel rent while the others are still empty lots.
+ */
+static bool prefers_candidate(GameState *g, int p, int level, int bestLevel)
+{
+    switch (g->players[p].strat) {
+    case STRAT_AGGRESSIVE:
+        /* R4.1: hotels as soon as legal. Concentrating on the group nearest
+           completion is the only way to get there -- spreading evenly across
+           every monopoly held reaches four houses everywhere and a hotel
+           nowhere, which is what this arm was doing before. */
+        return level > bestLevel;
+
+    case STRAT_CONSERVATIVE:
+    case STRAT_RISKTAKER:
+    case STRAT_OPPORTUNIST:
+        return level < bestLevel;
     }
     return false;
 }
 
 int decide_build(GameState *g, int p)
 {
-    int i, best = -1, bestLevel = MAX_HOUSES + 1;
+    int i, best = -1, bestLevel = -1;
 
     /* Appendix A's Labour Strike stops this player building for two rounds.
        A flag rather than a percentage, so it is read for presence. */
@@ -343,13 +509,19 @@ int decide_build(GameState *g, int p)
         }
 
         level = development_level(g, i);
-        if (level > MAX_HOUSES || level >= bestLevel) {
-            continue;               /* already a hotel, or not the emptiest  */
+        if (level > MAX_HOUSES) {
+            continue;                            /* already a hotel         */
+        }
+        if (!is_group_minimum(g, i)) {
+            continue;                            /* Rule 9                  */
         }
         if (g->players[p].cash < building_cost(g, i, level == MAX_HOUSES)) {
             continue;
         }
         if (!wants_to_build(g, p, i, level == MAX_HOUSES)) {
+            continue;
+        }
+        if (best >= 0 && !prefers_candidate(g, p, level, bestLevel)) {
             continue;
         }
 
@@ -490,41 +662,6 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
  * half. That is what makes the ordering below a real strategic difference
  * rather than a cosmetic one.
  */
-/* What it would cost p to raise every square of every monopoly it holds by
- * one level.
- *
- * R4.1 borrows "whenever the funds raise projected rent", and under Rule 8
- * that is the only condition in which borrowed money can raise rent at all --
- * so this figure is both the test (is it greater than zero) and the amount.
- * Borrowing the LK 2 ceiling instead would be a different bullet from a
- * different personality, and under D4's per-round compounding it is fatal:
- * with the maximum drawn on every monopoly, the Aggressive Investor went
- * bankrupt on all five plan seeds.
- */
-static int development_shortfall(const GameState *g, int p)
-{
-    int i, needed = 0;
-
-    for (i = 0; i < NUM_SQUARES; i++) {
-        const Square *s     = &g->board[i];
-        int           level;
-
-        if (s->type != SQ_PROPERTY || s->owner != p) {
-            continue;
-        }
-        if (!group_developable(g, p, s->group)) {
-            continue;
-        }
-        level = development_level(g, i);
-        if (level > MAX_HOUSES) {
-            continue;                            /* already a hotel         */
-        }
-        needed += building_cost(g, i, level == MAX_HOUSES);
-    }
-
-    return needed;
-}
-
 /* R4.1. Borrows to build and is in no hurry to repay.
  *
  * The repayment test is written cash/2 > principal rather than
@@ -637,40 +774,40 @@ static BankAction bank_risktaker(GameState *g, int p, int *amount)
     return BANK_NONE;
 }
 
-static BankAction bank_baseline(GameState *g, int p, int *amount)
+/* R4.4. Borrows only when the return beats the cost of the money.
+ *
+ * The comparison is the one the bullet names: what the borrowed capital would
+ * add, against what it would cost to hold. Projected appreciation across the
+ * whole portfolio stands for the return, and current_loan_rate for the cost
+ * -- both read live, so a Reduce Loan Interest regulation or a Stock Market
+ * Boom changes this player's willingness to borrow without a line here.
+ */
+static BankAction bank_opportunist(GameState *g, int p, int *amount)
 {
     const Player *pl = &g->players[p];
-    int           capacity;
+    int           i, upside = 0, cap;
 
     if (pl->loan.active) {
         if (pl->cash >= pl->loan.principal) {
             *amount = pl->loan.principal;
             return BANK_REPAY_FULL;
         }
-        if (pl->cash >= pl->loan.principal / 2 && pl->loan.principal > 1) {
-            *amount = pl->loan.principal / 2;
-            return BANK_REPAY_PART;
-        }
         if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
             return BANK_EXTEND;
-        }
-
-        capacity = loan_capacity(g, p);
-        if (capacity > 0 && pl->cash < START_CASH / 4) {
-            *amount = capacity;
-            return BANK_INCREASE;
         }
         return BANK_NONE;
     }
 
-    if (pl->cash < START_CASH / 2) {
-        int shortfall = START_CASH - pl->cash;
-        int cap       = max_loan(g, p);
-
-        if (cap > 0) {
-            *amount = (shortfall < cap) ? shortfall : cap;
-            return BANK_OBTAIN;
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p) {
+            upside += projected_appreciation(g, p, i);
         }
+    }
+
+    cap = max_loan(g, p);
+    if (cap > 0 && upside > pct_of(cap, current_loan_rate(g, p))) {
+        *amount = cap;
+        return BANK_OBTAIN;                      /* R4.4: return beats cost */
     }
 
     return BANK_NONE;
@@ -690,9 +827,8 @@ BankAction decide_bank(GameState *g, int p, int *amount)
     case STRAT_RISKTAKER:
         return bank_risktaker(g, p, amount);
 
-
     case STRAT_OPPORTUNIST:
-        return bank_baseline(g, p, amount);
+        return bank_opportunist(g, p, amount);
     }
     return BANK_NONE;
 }
