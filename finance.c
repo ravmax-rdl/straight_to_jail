@@ -26,7 +26,27 @@
  */
 int money_round(double v)
 {
-    return (int)(v + (v >= 0.0 ? 0.5 : -0.5));
+    double r = v + (v >= 0.0 ? 0.5 : -0.5);
+
+    /* Saturate rather than convert out of range. Casting a double outside
+       int's range is undefined behaviour in C, not merely a wrong number,
+       and milestone 4's inflation puts it within reach of ordinary play:
+       D21 compounds the loan rate with every draw, D4 compounds the
+       principal every round at that rate, and LK 5 sets no limit on how
+       often a term may be extended. Seed 1 reached a balance of 1.2 billion
+       by round 384 that way.
+
+       A debt that large is unpayable whatever number is printed beside it,
+       so the value is not what matters here -- what matters is that the D6'
+       boundary always yields a valid int, and that a saturated result is a
+       recognisable sentinel rather than an arbitrary wrapped one. */
+    if (r >= (double)INT_MAX) {
+        return INT_MAX;
+    }
+    if (r <= (double)INT_MIN) {
+        return INT_MIN;
+    }
+    return (int)r;
 }
 
 /* Scale a value by a signed percentage: apply_pct(1000, 15) == 1150,
@@ -387,16 +407,22 @@ static void unlock_collateral(GameState *g, int p)
     }
 }
 
-/* D21: the rate a NEW loan is written at. Additive adjustments first --
- * LK 24's Reduce Loan Interest and Appendix A's rate cards are percentage
- * points -- then the relative shifts that large events apply.
+/* D21: the rate a NEW loan would be written at right now. Additive
+ * adjustments first -- LK 24's Reduce Loan Interest and Appendix A's rate
+ * cards are percentage points -- then the relative shifts that large events
+ * apply.
  *
  * Square is -1 because the rate belongs to the economy rather than to any
- * square; only global and player-scoped effects can reach it. Both reads are
- * live now rather than deferred, so milestone 4 pushes its effects and this
- * function needs no edit.
+ * square; only global and player-scoped effects can reach it.
+ *
+ * The LK 36 block calls this with p = -1, which is not an afterthought but
+ * the point: D21 reads section 5's "Current Loan Interest : 9%" as the stable
+ * 8% with Economic Recession's relative +15% applied, so the block has to
+ * report the adjusted figure rather than econ.interestRatePct raw. Passing -1
+ * keeps a player-scoped rate card out of a board-wide display while still
+ * counting every global effect.
  */
-static int new_loan_rate(const GameState *g, int p)
+int current_loan_rate(const GameState *g, int p)
 {
     int rate = g->econ.interestRatePct + effect_modifier(g, EFF_INTEREST_ADD, -1, p);
 
@@ -418,7 +444,7 @@ void grant_loan(GameState *g, int p, int amount)
     if (amount > cap) {
         amount = cap;                          /* LK 2 is a hard ceiling   */
     }
-    rate = new_loan_rate(g, p);
+    rate = current_loan_rate(g, p);
 
     printf("%s obtained a secured loan.\n", pl->name);
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, amount));
@@ -456,7 +482,7 @@ void increase_loan(GameState *g, int p, int extra)
     if (extra > cap) {
         extra = cap;
     }
-    rate = new_loan_rate(g, p);
+    rate = current_loan_rate(g, p);
 
     printf("%s increased the loan amount.\n", pl->name);
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, extra));
@@ -539,11 +565,16 @@ void accrue_interest(GameState *g)
         pl->loan.principal = apply_pct(pl->loan.principal, pl->loan.ratePct);
 
 #ifdef DEBUG
-        /* Compounding is the one place in the program where a figure grows
-           without bound. Real terms cap out in the low hundreds of thousands;
-           anything near INT_MAX means a term or a rate has gone wrong. */
-        if (pl->loan.principal > INT_MAX / 2) {
-            fprintf(stderr, "R%d: %s principal %d is out of range\n",
+        /* Milestone 3 asserted a ceiling here on the reasoning that real
+           terms cap out in the low hundreds of thousands. Inflation retired
+           that premise: D21 lifts the rate every draw and LK 5 lets a term be
+           extended without limit, so a balance in the billions is now a
+           reachable state rather than a symptom. money_round saturates
+           instead of overflowing, which leaves one invariant still worth
+           asserting -- a balance that compounds upward can never come back
+           negative, and if it does the arithmetic has genuinely broken. */
+        if (pl->loan.principal < 0) {
+            fprintf(stderr, "R%d: %s principal went negative (%d)\n",
                     g->round, pl->name, pl->loan.principal);
             abort();
         }

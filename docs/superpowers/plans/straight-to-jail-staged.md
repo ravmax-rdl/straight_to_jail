@@ -767,50 +767,57 @@ further turn. **Restore `START_CASH` to 30000 before committing.**
 
 ### 4.1 The registry
 
-- [ ] **Step 1:** `effect_push` — append to `econ.effects[]` if `effectCount < MAX_EFFECTS`; `#ifdef DEBUG` assert on
+- [x] **Step 1:** `effect_push` — append to `econ.effects[]` if `effectCount < MAX_EFFECTS`; `#ifdef DEBUG` assert on
       overflow rather than silently dropping.
-- [ ] **Step 2:** Replace the `effect_modifier` stub with the real walk: for each record whose `kind` matches, whose
+- [x] **Step 2:** Replace the `effect_modifier` stub with the real walk: for each record whose `kind` matches, whose
       `owner` is `-1` or the given player, and whose scope matches the square (global / that group / that region bit /
       that exact square / that player), **sum** the magnitudes (LK 34 reads naturally as additive) and return the total.
       The caller applies it once via `apply_pct`.
-- [ ] **Step 3:** `tick_effects` — decrement `roundsLeft` on every record, then compact out the expired.
-- [ ] **Step 4:** Confirm all four choke points already consult the registry (they were written that way in milestone 2)
+- [x] **Step 3:** `tick_effects` — decrement `roundsLeft` on every record, then compact out the expired.
+- [x] **Step 4:** Confirm all four choke points already consult the registry (they were written that way in milestone 2)
       and that no arithmetic needed to move. If any did, the choke-point rule was violated somewhere — fix it there.
-- [ ] **Step 5:** Wire the end-of-round scheduler in **D13** order, and call `tick_effects` **after** the cadenced
+- [x] **Step 5:** Wire the end-of-round scheduler in **D13** order, and call `tick_effects` **after** the cadenced
       systems fire, so an effect created this round lives its full stated duration.
+
+> **Deviation, and why.** `tick_effects` runs **before** the cadences, not after. The stated intent — an effect created
+> this round lives its full stated duration — is defeated by the ordering that accompanies it: a 15-round effect pushed
+> and then immediately aged is readable for 14 rounds, and would leave the LK 36 block 14 rounds after appearing rather
+> than 15. Ticking first ages only records that already existed, which is the same rule as *do not age what was created
+> this round*, expressed without threading a boundary index through the function. Confirmed on seed 42: every boom and
+> decline window spans exactly 10 rounds and every regional-card window exactly 15.
 
 ### 4.2 Inflation
 
-- [ ] **Step 6:** `draw_inflation(g)` — pick uniformly from `{-3, 0, 2, 5, 8, 12}` (LK 12), store in
+- [x] **Step 6:** `draw_inflation(g)` — pick uniformly from `{-3, 0, 2, 5, 8, 12}` (LK 12), store in
       `econ.inflationPct`.
-- [ ] **Step 7:** Apply **permanently** (**D12**, LK 14) by mutating every square's stored `price`, `baseRent`,
+- [x] **Step 7:** Apply **permanently** (**D12**, LK 14) by mutating every square's stored `price`, `baseRent`,
       `houseCost`, `hotelCost`, `mortgageValue` through `apply_pct`.
 
 > Premiums, repair costs and both tax bases need no separate handling — they derive from `square_value` and
 > `building_cost`, so they inflate automatically. That is the choke-point pattern paying for itself.
 
-- [ ] **Step 8:** Move `econ.interestRatePct` **and `econ.incomeTaxPct`** by the same factor — the loan rate applies to
+- [x] **Step 8:** Move `econ.interestRatePct` **and `econ.incomeTaxPct`** by the same factor — the loan rate applies to
       **new loans only** (**D21**), and the tax rate is what makes Income Tax "adjusted by inflation" (**D2′**). Existing loans keep
       `loan.ratePct` from issue (LK 13). This is the most commonly mis-implemented rule in the spec; the `Loan` struct
       owning its own `ratePct` is what makes it correct by construction.
-- [ ] **Step 9:** Print the announcement. §5 gives no template — match the economic-event voice:
+- [x] **Step 9:** Print the announcement. §5 gives no template — match the economic-event voice:
       `Inflation Rate : +5%` then `All property values, costs and rents have been recalculated.`
 
 ### 4.3 Booms and declines
 
-- [ ] **Step 10:** `market_review(g)` — pick two distinct groups, one to boom and one to decline. Respect LK 33 (a group
+- [x] **Step 10:** `market_review(g)` — pick two distinct groups, one to boom and one to decline. Respect LK 33 (a group
       cannot be re-selected until 30 rounds have elapsed — `econ.groupCooldown[]`) and LK 30 (no group repeats the same
       event in consecutive reviews — `lastBoomGroup`, `lastDeclineGroup`). Decrement the cooldowns each round.
-- [ ] **Step 11:** Push the LK 31 boom effects, `SCOPE_GROUP`, 10 rounds: `VALUE_MUL +20`, `RENT_MUL +25`,
+- [x] **Step 11:** Push the LK 31 boom effects, `SCOPE_GROUP`, 10 rounds: `VALUE_MUL +20`, `RENT_MUL +25`,
       `MORTGAGE_MUL +15`, `BUILD_COST_MUL +10`. LK 31's separate "+15% purchase prices" is subsumed by `VALUE_MUL`,
       because purchase price and market value are the same number in this model — document that in a comment.
-- [ ] **Step 12:** Push the LK 32 decline effects, `SCOPE_GROUP`, 10 rounds: `VALUE_MUL −15`, `RENT_MUL −20`,
+- [x] **Step 12:** Push the LK 32 decline effects, `SCOPE_GROUP`, 10 rounds: `VALUE_MUL −15`, `RENT_MUL −20`,
       `MORTGAGE_MUL −10`, `AUCTION_OPEN_MUL −25`.
-- [ ] **Step 13:** Populate the Market Boom and Market Decline sections of `market_conditions` from the live registry.
+- [x] **Step 13:** Populate the Market Boom and Market Decline sections of `market_conditions` from the live registry.
 
 ### 4.4 National events and regional cards
 
-- [ ] **Step 14:** `national_event(g)` — one of the eight LK 18 events at random, pushed with `owner = -1`,
+- [x] **Step 14:** `national_event(g)` — one of the eight LK 18 events at random, pushed with `owner = -1`,
       `rounds = 15`:
 
 | Event | Effects |
@@ -833,7 +840,7 @@ Tourism Boom
 Southern Province properties increase in value by 15%.
 ```
 
-- [ ] **Step 15:** `regional_card(g)` — one of the **twelve** Table 4 cards, 15 rounds. Multi-square cards push one
+- [x] **Step 15:** `regional_card(g)` — one of the **twelve** Table 4 cards, 15 rounds. Multi-square cards push one
       `SCOPE_SQUARE` effect per square, or one `SCOPE_REGION` effect where a tag captures the set exactly.
 
 | Card | Effect |
@@ -851,12 +858,12 @@ Southern Province properties increase in value by 15%.
 | Electricity Tariff Increase | `UTILITY_RENT_MUL +25` global |
 | Water Shortage | `UTILITY_RENT_MUL +20` on 28; `VALUE_MUL −10` on `NWSDB_ADJACENT` |
 
-- [ ] **Step 16:** Populate the Regional Development section of `market_conditions` with card name, magnitude and rounds
+- [x] **Step 16:** Populate the Regional Development section of `market_conditions` with card name, magnitude and rounds
       remaining. Call both systems on the 15-round cadence, national event first.
 
 ### 4.5 Government regulations
 
-- [ ] **Step 17:** `government_regulation(g)` — one of the eight LK 24 regulations, pushed for 20 rounds, replacing the
+- [x] **Step 17:** `government_regulation(g)` — one of the eight LK 24 regulations, pushed for 20 rounds, replacing the
       previous one. Store the choice in `econ.activeRegulation`.
 
 | Regulation | Implementation |
@@ -870,7 +877,7 @@ Southern Province properties increase in value by 15%.
 | Insurance Regulation | `PREMIUM_MUL −15` global; coverage unchanged |
 | Anti-Speculation Act | `MAX_PROPERTIES 3` — gate in `decide_buy` (**D25**) |
 
-- [ ] **Step 18:** Wire the three non-multiplier regulations to their read sites: the tax helper consults `TAX_MUL`;
+- [x] **Step 18:** Wire the three non-multiplier regulations to their read sites: the tax helper consults `TAX_MUL`;
       `grant_loan` consults `INTEREST_MUL`; `decide_buy` refuses a purchase that would take the player above three
       **undeveloped** properties while `MAX_PROPERTIES` is active. Comment that **D25** makes LK 24's five-round
       development clause unreachable.
@@ -883,12 +890,12 @@ Construction costs reduced by 30%.
 
 ### 4.6 The National Event Card deck
 
-- [ ] **Step 19:** `deck_init` — fill `deck.cards[0..19]` with the 20 card ids, shuffle with Fisher–Yates, `head = 0`.
+- [x] **Step 19:** `deck_init` — fill `deck.cards[0..19]` with the 20 card ids, shuffle with Fisher–Yates, `head = 0`.
       Call it from `game_init`.
-- [ ] **Step 20:** `draw_event_card(g, p)` — read `cards[head]`, execute, then `head = (head + 1) % DECK_SIZE`. That one
+- [x] **Step 20:** `draw_event_card(g, p)` — read `cards[head]`, execute, then `head = (head + 1) % DECK_SIZE`. That one
       line is what "returned to the bottom of the deck" means for an array-plus-index queue: nothing moves, only the
       index advances. O(1), no shifting, no linked list (**R0.5**).
-- [ ] **Step 21:** Execute each card scoped `SCOPE_PLAYER` to the drawer with `owner = p` and `rounds = 15` unless the
+- [x] **Step 21:** Execute each card scoped `SCOPE_PLAYER` to the drawer with `owner = p` and `rounds = 15` unless the
       card names a shorter duration (App A: "in addition to other modifiers").
 
 | Card | Implementation |
@@ -914,9 +921,18 @@ Construction costs reduced by 30%.
 | Government Grant | credit LKR 5,000 to a random player immediately |
 | National Disaster | damage a random developed property immediately |
 
-- [ ] **Step 22:** Honour `EFF_CLOSED` in `square_rent` and `EFF_CONSTRUCTION_SUSPENDED` in `decide_build`. Wire
+- [x] **Step 22:** Honour `EFF_CLOSED` in `square_rent` and `EFF_CONSTRUCTION_SUSPENDED` in `decide_build`. Wire
       `SQ_EVENT` (squares 7, 22, 36 **only** — square 2 is `SQ_COMMUNITY`, **D17**) to `draw_event_card`. Print the card
       name and effect in the two-line economic-event voice.
+
+> **Two notes on this step.** `EFF_CLOSED` and `EFF_CONSTRUCTION_SUSPENDED` carry no percentage, so `effect_modifier`
+> reports them as `0` — indistinguishable from absent. Both are read through a new `effect_active` predicate instead;
+> their presence is their whole meaning.
+>
+> **Heavy Floods and National Disaster set `damaged` and stop there.** Milestone 5 owns what damage means — the rent
+> guard that stops a damaged building earning (R3.9) and the automatic repair that lifts it again — and those two must
+> land together. Honouring the flag now, before repairs exist, would kill the property for the rest of the game rather
+> than until its owner could afford the work.
 
 **Verify:**
 ```
@@ -926,6 +942,14 @@ Construction costs reduced by 30%.
 ./monopoly 42 | grep -c "^Government Regulation"        # 25   (500 / 20)
 make debug && ./monopoly 42                             # effectCount never exceeds MAX_EFFECTS
 ```
+
+> **The absolute counts above assume a 500-round game, and games no longer reach 500.** Rule 15's first ending became
+> reachable in milestone 3, and inflation brings it forward considerably — rents, taxes and building costs all climb
+> while starting cash does not, so seed 42 now ends at round 150. Every cadence still fires exactly `rounds / N` times;
+> check the ratio rather than the constant. Seed 42: 150 rounds, 15 inflation draws, 10 economic events, 7 regulations.
+>
+> Peak concurrent `effectCount` measured by bisecting `MAX_EFFECTS` until the DEBUG guard fires: **between 22 and 24**
+> across seven seeds, against a limit of 128.
 After an inflation draw a property's price must have changed by exactly that percentage, rounded. An existing loan's
 `Interest Rate` must **not** change while the LK 36 block's rate does — grep both and confirm they diverge after the
 first non-zero draw. A boomed group's rent must sit exactly 25% above its unboomed value. A regional card's section must

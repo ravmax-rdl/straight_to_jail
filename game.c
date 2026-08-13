@@ -61,6 +61,10 @@ bool game_init(GameState *g, const char *csvPath)
     g->econ.activeRegulation  = -1;
     g->econ.lastBoomGroup     = GRP_NONE;
     g->econ.lastDeclineGroup  = GRP_NONE;
+    g->econ.activeCard        = -1;
+
+    /* Shuffled once, then walked in order for the rest of the game (App A). */
+    deck_init(g);
 
     g->round = 0;
     return true;
@@ -265,22 +269,54 @@ void round_summary(const GameState *g)
  */
 void market_conditions(const GameState *g)
 {
+    const char *card;
+    int         grp, left, pct = 0;
+
     rule_line('=', MARKET_RULE);
     printf("Current Market Conditions\n");
     rule_line('=', MARKET_RULE);
     printf("\n");
 
-    /* Market Boom, Market Decline and Regional Development arrive with the
-       effect registry in milestone 4. */
+    /* A section with nothing active prints nothing at all -- header, rule and
+       body together. LK 36 reports what is in force, and an empty heading
+       reports the absence of something rather than the presence of nothing. */
+    grp = boom_group(g, &left);
+    if (grp != GRP_NONE) {
+        printf("Market Boom\n");
+        rule_line('-', 13);
+        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("\n");
+    }
+
+    grp = decline_group(g, &left);
+    if (grp != GRP_NONE) {
+        printf("Market Decline\n");
+        rule_line('-', 16);
+        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("\n");
+    }
+
+    card = active_card(g, &pct, &left);
+    if (card != NULL) {
+        printf("Regional Development\n");
+        rule_line('-', 23);
+        printf("%s : %+d%%, %d rounds remaining\n", card, pct, left);
+        printf("\n");
+    }
 
     printf("Inflation\n");
     rule_line('-', 12);
     printf("%+d%%\n", g->econ.inflationPct);
     printf("\n");
 
+    /* D21: the rate a new loan would be written at now, not the stored one.
+       Section 5's sample prints 9% during an Economic Recession, which is the
+       stable 8% with the event's relative +15% applied -- so the block has to
+       report the adjusted figure. Player -1 keeps a player-scoped Appendix A
+       rate card out of a board-wide reading. */
     printf("Current Loan Interest\n");
     rule_line('-', 23);
-    printf("%d%%\n", g->econ.interestRatePct);
+    printf("%d%%\n", current_loan_rate(g, -1));
     printf("\n");
 
     rule_line('=', MARKET_RULE);
@@ -449,9 +485,15 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         bank_visit(g, p);
         break;
 
-    /* Still to come, each in its own step. */
-    case SQ_INSURANCE:
+    /* Appendix A. Squares 7, 22 and 36 only -- square 2 is SQ_COMMUNITY and
+       levies rather than draws (D17), which is why there are three card
+       squares on this board and not four. */
     case SQ_EVENT:
+        draw_event_card(g, p);
+        break;
+
+    /* Still to come, in milestone 5. */
+    case SQ_INSURANCE:
         break;
     }
 }
@@ -732,6 +774,31 @@ void play_round(GameState *g)
     accrue_interest(g);             /* LK 4, D4                            */
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
+
+    /* The registry ages BEFORE this round's cadences fire, so that nothing
+       created below is docked a round the moment it is created. D13 writes
+       the tick after the cadences; see the note on tick_effects for why that
+       defeats its own stated intent. */
+    tick_effects(g);                /* D12, LK 35                          */
+    tick_cooldowns(g);              /* LK 33                               */
+
+    /* The cadenced systems, in D13's order. Each fires on its own clock and
+       none of them knows about the others -- the registry is what lets them
+       compose without a line of coordination here. */
+    if (g->round % INFLATION_EVERY == 0) {
+        draw_inflation(g);          /* LK 12-14                            */
+    }
+    if (g->round % MARKET_EVERY == 0) {
+        market_review(g);           /* LK 30-33                            */
+    }
+    if (g->round % EVENT_EVERY == 0) {
+        national_event(g);          /* LK 18: the whole board              */
+        regional_card(g);           /* Table 4: named squares              */
+    }
+    if (g->round % REGULATION_EVERY == 0) {
+        government_regulation(g);   /* LK 24                               */
+    }
+
     round_summary(g);
     market_conditions(g);
 }

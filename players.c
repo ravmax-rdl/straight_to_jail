@@ -25,6 +25,27 @@
    rent, monopolies and auctions all get exercised. */
 bool decide_buy(GameState *g, int p, int sq)
 {
+    /* LK 24's Anti-Speculation Act, and the one regulation a strategy has to
+     * read for itself -- the other seven are percentages that a choke point
+     * applies without anyone asking.
+     *
+     * D25 implements the cap alone and drops the rule's second clause, that
+     * additional purchases require development within five rounds. Enforcing
+     * the cap strictly makes that clause unreachable: the additional purchase
+     * can never happen, so there is nothing to develop and no five rounds to
+     * count. One of the two has to give, and the cap is the half the rule
+     * leads with.
+     *
+     * effect_modifier sums, which would be wrong for a ceiling -- but LK 24
+     * runs one regulation at a time, so at most one such record exists and
+     * the sum is that record.
+     */
+    int cap = effect_modifier(g, EFF_MAX_PROPERTIES, sq, p);
+
+    if (cap > 0 && count_undeveloped(g, p) >= cap) {
+        return false;
+    }
+
     return g->players[p].cash >= square_value(g, sq);
 }
 
@@ -92,6 +113,12 @@ static bool group_developable(const GameState *g, int p, PropertyGroup grp)
 int decide_build(GameState *g, int p)
 {
     int i, best = -1, bestLevel = MAX_HOUSES + 1;
+
+    /* Appendix A's Labour Strike stops this player building for two rounds.
+       A flag rather than a percentage, so it is read for presence. */
+    if (effect_active(g, EFF_CONSTRUCTION_SUSPENDED, -1, p)) {
+        return -1;
+    }
 
     for (i = 0; i < NUM_SQUARES; i++) {
         const Square *s = &g->board[i];

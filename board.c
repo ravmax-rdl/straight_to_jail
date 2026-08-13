@@ -500,6 +500,17 @@ int count_owned(const GameState *g, int p, SquareType type)
     return n;
 }
 
+/* The colour group's printable name, for the LK 36 block. The table already
+   exists to validate the CSV's group column; exposing a reader is cheaper and
+   safer than a second copy of the eight names in game.c. */
+const char *group_name(PropertyGroup grp)
+{
+    if (grp <= GRP_NONE || grp >= GRP_COUNT) {
+        return "None";
+    }
+    return GROUP_NAMES[grp];
+}
+
 /* Rule 8: p holds every square of the colour group, which is the only thing
  * that permits construction.
  *
@@ -527,6 +538,26 @@ bool group_monopoly(const GameState *g, int p, PropertyGroup grp)
     }
 
     return members > 0;
+}
+
+/* How many purchasable squares p holds that carry no buildings.
+ *
+ * The Anti-Speculation Act's base (LK 24, D25). Railways and utilities count:
+ * neither can ever be developed, so both are permanently undeveloped holdings
+ * and the rule is aimed at exactly that -- accumulating board without
+ * improving it.
+ */
+int count_undeveloped(const GameState *g, int p)
+{
+    int i, n = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p && is_purchasable(g, i)
+            && development_level(g, i) == 0) {
+            n++;
+        }
+    }
+    return n;
 }
 
 /* How far a square is developed, on one scale: 0-4 houses, or MAX_HOUSES + 1
@@ -685,6 +716,16 @@ int square_rent(const GameState *g, int sq, int diceTotal)
     int rent;
 
     if (s->owner < 0 || s->mortgaged) {
+        return 0;
+    }
+
+    /* Appendix A's Political Rally shuts a square for two rounds. Read before
+       the type switch because it applies whatever the square is, and read
+       through effect_active rather than effect_modifier because EFF_CLOSED
+       carries no magnitude to sum -- it is a flag, and its presence is the
+       whole of its meaning. (LK 26's separate closure, for a building decayed
+       below 25%, already falls out of condition_rent_pct returning zero.) */
+    if (effect_active(g, EFF_CLOSED, sq, s->owner)) {
         return 0;
     }
 
