@@ -44,7 +44,7 @@ typedef struct {
 
 static const Profile PROFILE[] = {
     /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
-    /* STRAT_CONSERVATIVE */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC },
+    /* STRAT_CONSERVATIVE */ {  90, 90, 10, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
     /* STRAT_RISKTAKER    */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC },
     /* STRAT_OPPORTUNIST  */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC }
 };
@@ -154,6 +154,38 @@ static bool buy_aggressive(GameState *g, int p, int sq)
     return rent_still_payable(g, p) && g->players[p].cash >= square_value(g, sq);
 }
 
+/* R4.2. Buys out of surplus rather than out of capital, and stops buying
+ * altogether while the market is falling.
+ *
+ * "No investments during recessions" is read off the registry rather than
+ * from any flag: a global negative VALUE_MUL is exactly what Economic
+ * Recession, Economic Downturn and a market decline all push, so one query
+ * covers every way the spec has of saying the market is down. Square -1
+ * restricts it to board-wide effects, which is what "recession" means -- a
+ * single group in decline is a bargain, not a recession.
+ */
+static bool buy_conservative(GameState *g, int p, int sq)
+{
+    int price = square_value(g, sq);
+    int cash  = g->players[p].cash;
+
+    if (effect_modifier(g, EFF_VALUE_MUL, -1, p) < 0) {
+        return false;                            /* R4.2: not in a slump    */
+    }
+
+    /* R4.2: buys only if at least half the cash survives the purchase --
+       except for railways and utilities, where it will go down to a quarter.
+       That relaxation IS the "prefers railways and utilities" bullet: they
+       are fixed income that can never be developed, so they never demand a
+       second outlay the way a colour group does, and this personality will
+       dig deeper for one. */
+    if (g->board[sq].type != SQ_PROPERTY) {
+        return cash - price >= cash / 4;
+    }
+
+    return cash - price >= cash / 2;
+}
+
 static bool wants_to_buy(GameState *g, int p, int sq)
 {
     switch (g->players[p].strat) {
@@ -161,6 +193,8 @@ static bool wants_to_buy(GameState *g, int p, int sq)
         return buy_aggressive(g, p, sq);
 
     case STRAT_CONSERVATIVE:
+        return buy_conservative(g, p, sq);
+
     case STRAT_RISKTAKER:
     case STRAT_OPPORTUNIST:
         return g->players[p].cash >= square_value(g, sq);
@@ -444,24 +478,39 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
  * half. That is what makes the ordering below a real strategic difference
  * rather than a cosmetic one.
  */
-/* Does p hold a monopoly it has not finished building out? R4.1 borrows
-   "whenever the funds raise projected rent", and under Rule 8 that is the
-   only condition in which borrowed money can raise rent at all. */
-static bool has_buildable_monopoly(const GameState *g, int p)
+/* What it would cost p to raise every square of every monopoly it holds by
+ * one level.
+ *
+ * R4.1 borrows "whenever the funds raise projected rent", and under Rule 8
+ * that is the only condition in which borrowed money can raise rent at all --
+ * so this figure is both the test (is it greater than zero) and the amount.
+ * Borrowing the LK 2 ceiling instead would be a different bullet from a
+ * different personality, and under D4's per-round compounding it is fatal:
+ * with the maximum drawn on every monopoly, the Aggressive Investor went
+ * bankrupt on all five plan seeds.
+ */
+static int development_shortfall(const GameState *g, int p)
 {
-    int i;
+    int i, needed = 0;
 
     for (i = 0; i < NUM_SQUARES; i++) {
-        const Square *s = &g->board[i];
+        const Square *s     = &g->board[i];
+        int           level;
 
         if (s->type != SQ_PROPERTY || s->owner != p) {
             continue;
         }
-        if (group_developable(g, p, s->group) && development_level(g, i) <= MAX_HOUSES) {
-            return true;
+        if (!group_developable(g, p, s->group)) {
+            continue;
         }
+        level = development_level(g, i);
+        if (level > MAX_HOUSES) {
+            continue;                            /* already a hotel         */
+        }
+        needed += building_cost(g, i, level == MAX_HOUSES);
     }
-    return false;
+
+    return needed;
 }
 
 /* R4.1. Borrows to build and is in no hurry to repay.
@@ -485,12 +534,57 @@ static BankAction bank_aggressive(GameState *g, int p, int *amount)
         return BANK_NONE;
     }
 
-    if (has_buildable_monopoly(g, p)) {
+    {
+        int needed = development_shortfall(g, p) - pl->cash;
+        int cap    = max_loan(g, p);
+
+        if (needed > 0 && cap > 0) {
+            *amount = (needed < cap) ? needed : cap;
+            return BANK_OBTAIN;                  /* R4.1: funds the build   */
+        }
+    }
+
+    return BANK_NONE;
+}
+
+/* R4.2. Treats a loan as an emergency measure and clears it at the first
+ * opportunity.
+ *
+ * "Borrows only when bankruptcy is otherwise unavoidable" is a judgment call
+ * of the kind D9 exists to pin down, and the proxy here is a cash cushion
+ * gone: below a tenth of the starting stake this player cannot meet an
+ * ordinary rent, and the D11 ladder is the only thing left between it and
+ * Rule 14.
+ *
+ * "Repaid at every Bank visit" is taken literally, tempered by the same
+ * bullet list's "largest cash reserve" -- in full when it can be afforded
+ * outright, half the remaining cash when it cannot. Repaying down to nothing
+ * would honour one bullet by breaking another.
+ */
+#define CONSERVATIVE_DISTRESS_DIV 10
+
+static BankAction bank_conservative(GameState *g, int p, int *amount)
+{
+    const Player *pl = &g->players[p];
+
+    if (pl->loan.active) {
+        if (pl->cash >= pl->loan.principal) {
+            *amount = pl->loan.principal;
+            return BANK_REPAY_FULL;
+        }
+        if (pl->cash / 2 > 0) {
+            *amount = pl->cash / 2;
+            return BANK_REPAY_PART;
+        }
+        return BANK_NONE;
+    }
+
+    if (pl->cash < START_CASH / CONSERVATIVE_DISTRESS_DIV) {
         int cap = max_loan(g, p);
 
         if (cap > 0) {
-            *amount = cap;                       /* R4.1: funds the build   */
-            return BANK_OBTAIN;
+            *amount = cap;
+            return BANK_OBTAIN;                  /* R4.2: staving off ruin  */
         }
     }
 
@@ -545,6 +639,8 @@ BankAction decide_bank(GameState *g, int p, int *amount)
         return bank_aggressive(g, p, amount);
 
     case STRAT_CONSERVATIVE:
+        return bank_conservative(g, p, amount);
+
     case STRAT_RISKTAKER:
     case STRAT_OPPORTUNIST:
         return bank_baseline(g, p, amount);
