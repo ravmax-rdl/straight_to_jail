@@ -407,16 +407,22 @@ static void unlock_collateral(GameState *g, int p)
     }
 }
 
-/* D21: the rate a NEW loan is written at. Additive adjustments first --
- * LK 24's Reduce Loan Interest and Appendix A's rate cards are percentage
- * points -- then the relative shifts that large events apply.
+/* D21: the rate a NEW loan would be written at right now. Additive
+ * adjustments first -- LK 24's Reduce Loan Interest and Appendix A's rate
+ * cards are percentage points -- then the relative shifts that large events
+ * apply.
  *
  * Square is -1 because the rate belongs to the economy rather than to any
- * square; only global and player-scoped effects can reach it. Both reads are
- * live now rather than deferred, so milestone 4 pushes its effects and this
- * function needs no edit.
+ * square; only global and player-scoped effects can reach it.
+ *
+ * The LK 36 block calls this with p = -1, which is not an afterthought but
+ * the point: D21 reads section 5's "Current Loan Interest : 9%" as the stable
+ * 8% with Economic Recession's relative +15% applied, so the block has to
+ * report the adjusted figure rather than econ.interestRatePct raw. Passing -1
+ * keeps a player-scoped rate card out of a board-wide display while still
+ * counting every global effect.
  */
-static int new_loan_rate(const GameState *g, int p)
+int current_loan_rate(const GameState *g, int p)
 {
     int rate = g->econ.interestRatePct + effect_modifier(g, EFF_INTEREST_ADD, -1, p);
 
@@ -438,7 +444,7 @@ void grant_loan(GameState *g, int p, int amount)
     if (amount > cap) {
         amount = cap;                          /* LK 2 is a hard ceiling   */
     }
-    rate = new_loan_rate(g, p);
+    rate = current_loan_rate(g, p);
 
     printf("%s obtained a secured loan.\n", pl->name);
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, amount));
@@ -476,7 +482,7 @@ void increase_loan(GameState *g, int p, int extra)
     if (extra > cap) {
         extra = cap;
     }
-    rate = new_loan_rate(g, p);
+    rate = current_loan_rate(g, p);
 
     printf("%s increased the loan amount.\n", pl->name);
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, extra));

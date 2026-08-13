@@ -361,3 +361,197 @@ int decline_group(const GameState *g, int *roundsLeft)
 {
     return market_group(g, false, roundsLeft);
 }
+
+/* ---------------------------------------- national events, Table 4 cards -- */
+/*
+ * Two systems on the same fifteen-round clock, and the reason they are two
+ * rather than one is scope. LK 18's national events are the weather over the
+ * whole board; Table 4's regional cards name particular squares and stand for
+ * a development somewhere specific. They fire together, national first.
+ *
+ * Both reduce to the same shape -- a name, a line of prose, and up to three
+ * effect specifications -- so both use the table below and neither needs code
+ * of its own beyond choosing a row.
+ */
+
+typedef struct {
+    EffectKind kind;
+    int        scopeKind;      /* an EffectScope                            */
+    int        scope;          /* group, region mask, or square index       */
+    int        magnitudePct;
+} EffectSpec;
+
+typedef struct {
+    const char *name;
+    const char *detail;        /* the third line of the announcement        */
+    EffectSpec  eff[3];
+    int         effCount;
+} EconomicEvent;
+
+/* LK 18. FLOOD_RISK and RIOT_RISK carry no percentage anyone reads yet --
+   milestone 5's disaster roll takes them as peril weights, which is why they
+   are effects rather than flags on Economy: they expire on their own. */
+static const EconomicEvent NATIONAL_EVENTS[] = {
+    { "Tourism Boom",
+      "Southern Province properties increase in value by 15%.",
+      { { EFF_HOTEL_RENT_MUL, SCOPE_GLOBAL, 0, +100 },
+        { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_SOUTHERN_COASTAL, +15 } }, 2 },
+
+    { "Fuel Crisis",
+      "Railway rents double and construction costs rise by 20%.",
+      { { EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, +100 },
+        { EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, +20 } }, 2 },
+
+    { "Heavy Monsoon",
+      "Coastal property values fall by 10% and premiums rise by 20%.",
+      { { EFF_PREMIUM_MUL, SCOPE_GLOBAL, 0, +20 },
+        { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COASTAL, -10 },
+        { EFF_FLOOD_RISK, SCOPE_GLOBAL, 0, +100 } }, 3 },
+
+    { "Economic Recession",
+      "Property values fall by 15% and rents by 10%.",
+      { { EFF_VALUE_MUL, SCOPE_GLOBAL, 0, -15 },
+        { EFF_RENT_MUL, SCOPE_GLOBAL, 0, -10 },
+        { EFF_INTEREST_MUL, SCOPE_GLOBAL, 0, +15 } }, 3 },
+
+    { "Stock Market Boom",
+      "Property values rise by 10% and borrowing gets cheaper.",
+      { { EFF_VALUE_MUL, SCOPE_GLOBAL, 0, +10 },
+        { EFF_INTEREST_MUL, SCOPE_GLOBAL, 0, -10 } }, 2 },
+
+    { "Government Housing Programme",
+      "Construction costs fall by 25%.",
+      { { EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, -25 } }, 1 },
+
+    { "Foreign Investment",
+      "Commercial property values rise by 20%.",
+      { { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COMMERCIAL, +20 } }, 1 },
+
+    { "Political Unrest",
+      "Hotel rents fall by half.",
+      { { EFF_HOTEL_RENT_MUL, SCOPE_GLOBAL, 0, -50 },
+        { EFF_RIOT_RISK, SCOPE_GLOBAL, 0, +100 } }, 2 }
+};
+#define NATIONAL_EVENT_COUNT ((int)(sizeof NATIONAL_EVENTS / sizeof NATIONAL_EVENTS[0]))
+
+/* Table 4's twelve regional cards. A card naming several squares pushes one
+   SCOPE_SQUARE record per square; one whose reach a D14 tag captures exactly
+   pushes a single SCOPE_REGION record instead. Both readings are the same to
+   effect_modifier, so the choice is only about how many records it takes. */
+static const EconomicEvent REGIONAL_CARDS[] = {
+    { "Southern Tourism Boom", "Rents in the deep south rise by 40%.",
+      { { EFF_RENT_MUL, SCOPE_SQUARE, 26, +40 },
+        { EFF_RENT_MUL, SCOPE_SQUARE, 27, +40 },
+        { EFF_RENT_MUL, SCOPE_SQUARE, 29, +40 } }, 3 },
+
+    { "Port City Expansion", "Colombo values rise by 25%.",
+      { { EFF_VALUE_MUL, SCOPE_SQUARE, 1, +25 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 3, +25 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 5, +25 } }, 3 },
+
+    { "IT Industry Growth", "Suburban values rise by 20%.",
+      { { EFF_VALUE_MUL, SCOPE_SQUARE, 13, +20 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 11, +20 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 14, +20 } }, 3 },
+
+    { "Northern Development Programme", "Northern values rise by 30%.",
+      { { EFF_VALUE_MUL, SCOPE_SQUARE, 31, +30 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 32, +30 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 34, +30 } }, 3 },
+
+    { "Tea Export Boom", "Nuwara Eliya rises in value by 35%.",
+      { { EFF_VALUE_MUL, SCOPE_SQUARE, 37, +35 } }, 1 },
+
+    { "Airport Expansion", "Rents around the airport rise by 30%.",
+      { { EFF_RENT_MUL, SCOPE_SQUARE, 16, +30 },
+        { EFF_RENT_MUL, SCOPE_SQUARE, 18, +30 },
+        { EFF_RENT_MUL, SCOPE_SQUARE, 19, +30 } }, 3 },
+
+    { "University City Growth", "Kandy values rise by 20%.",
+      { { EFF_VALUE_MUL, SCOPE_SQUARE, 23, +20 },
+        { EFF_VALUE_MUL, SCOPE_SQUARE, 21, +20 } }, 2 },
+
+    { "Beach Pollution", "Southern coastal rents fall by 30%.",
+      { { EFF_RENT_MUL, SCOPE_REGION, (int)REGION_SOUTHERN_COASTAL, -30 } }, 1 },
+
+    { "Flood Damage", "Coastal values fall by 20%.",
+      { { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COASTAL, -20 } }, 1 },
+
+    { "Transport Strike", "Railway rents fall by 40%.",
+      { { EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, -40 } }, 1 },
+
+    { "Electricity Tariff Increase", "Utility rents rise by 25%.",
+      { { EFF_UTILITY_RENT_MUL, SCOPE_GLOBAL, 0, +25 } }, 1 },
+
+    { "Water Shortage", "Water board rents rise while nearby values fall.",
+      { { EFF_UTILITY_RENT_MUL, SCOPE_SQUARE, 28, +20 },
+        { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_NWSDB_ADJACENT, -10 } }, 2 }
+};
+#define REGIONAL_CARD_COUNT ((int)(sizeof REGIONAL_CARDS / sizeof REGIONAL_CARDS[0]))
+
+/* Push a row's whole effect list and print its three-line announcement.
+   owner is -1 for the board-wide systems and a player for Appendix A's
+   cards, which reuse this in milestone 4.6. */
+static void fire_event(GameState *g, const EconomicEvent *ev, const char *heading,
+                       int owner, int rounds)
+{
+    int i;
+
+    for (i = 0; i < ev->effCount; i++) {
+        effect_push(g, ev->eff[i].kind, (EffectScope)ev->eff[i].scopeKind,
+                    ev->eff[i].scope, ev->eff[i].magnitudePct, owner, rounds);
+    }
+
+    printf("%s\n", heading);
+    printf("%s\n", ev->name);
+    printf("%s\n", ev->detail);
+}
+
+/* LK 18, every fifteen rounds, affecting everyone.
+ *
+ * D21 is why Economic Recession carries INTEREST_MUL rather than an additive
+ * shift: the rule's "+15%" is relative, so 8% becomes 9%, which is the figure
+ * section 5's own sample block prints.
+ */
+void national_event(GameState *g)
+{
+    const EconomicEvent *ev = &NATIONAL_EVENTS[rng_range(0, NATIONAL_EVENT_COUNT - 1)];
+
+    fire_event(g, ev, "Economic Event", -1, EVENT_ROUNDS);
+}
+
+/* Table 4, every fifteen rounds. The chosen row is remembered because the
+   LK 36 block has to name it and an Effect record carries no name; the rounds
+   remaining are recomputed from D19's clock rather than counted twice. */
+void regional_card(GameState *g)
+{
+    int idx = rng_range(0, REGIONAL_CARD_COUNT - 1);
+
+    g->econ.activeCard      = idx;
+    g->econ.activeCardRound = g->round;
+    fire_event(g, &REGIONAL_CARDS[idx], "Regional Development", -1, CARD_ROUNDS);
+}
+
+/* The LK 36 block's third section. NULL when nothing is in force.
+ *
+ * The magnitude returned is the first effect's, which is the one the card is
+ * named for -- every multi-effect row here either repeats one magnitude
+ * across several squares or leads with its headline figure.
+ */
+const char *active_card(const GameState *g, int *magnitudePct, int *roundsLeft)
+{
+    int left;
+
+    if (g->econ.activeCard < 0) {
+        return NULL;
+    }
+
+    left = CARD_ROUNDS - (g->round - g->econ.activeCardRound);
+    if (left <= 0) {
+        return NULL;
+    }
+
+    *magnitudePct = REGIONAL_CARDS[g->econ.activeCard].eff[0].magnitudePct;
+    *roundsLeft   = left;
+    return REGIONAL_CARDS[g->econ.activeCard].name;
+}

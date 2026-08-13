@@ -359,6 +359,7 @@ void pay_community_fund(GameState *g, int p);
    LK 5's one-loan-at-a-time rule, which is why the increase action reads the
    former. accrue_interest and check_loan_default run once per round in that
    order (D13), so a loan can default on the interest it has just accrued. */
+int  current_loan_rate(const GameState *g, int p);
 bool eligible_collateral(const GameState *g, int p, int sq);
 int  loan_capacity(const GameState *g, int p);
 int  max_loan(const GameState *g, int p);
@@ -422,12 +423,15 @@ void tick_cooldowns(GameState *g);
    permanent (D12). */
 void draw_inflation(GameState *g);
 void market_review(GameState *g);
+void national_event(GameState *g);
+void regional_card(GameState *g);
 
 /* events.c -- LK 36 block queries. game.c owns every formatted block, so
    these answer rather than print. Both read the live registry, so there is no
    second copy of what is active to drift from it. GRP_NONE = nothing. */
 int boom_group(const GameState *g, int *roundsLeft);
 int decline_group(const GameState *g, int *roundsLeft);
+const char *active_card(const GameState *g, int *magnitudePct, int *roundsLeft);
 
 /* players.c -- the decision engines. Placeholder bodies until milestone 6;
    the signatures are final, so that milestone touches players.c and no other

@@ -266,7 +266,8 @@ void round_summary(const GameState *g)
  */
 void market_conditions(const GameState *g)
 {
-    int grp, left;
+    const char *card;
+    int         grp, left, pct = 0;
 
     rule_line('=', MARKET_RULE);
     printf("Current Market Conditions\n");
@@ -292,16 +293,27 @@ void market_conditions(const GameState *g)
         printf("\n");
     }
 
-    /* Regional Development arrives with the Table 4 cards. */
+    card = active_card(g, &pct, &left);
+    if (card != NULL) {
+        printf("Regional Development\n");
+        rule_line('-', 23);
+        printf("%s : %+d%%, %d rounds remaining\n", card, pct, left);
+        printf("\n");
+    }
 
     printf("Inflation\n");
     rule_line('-', 12);
     printf("%+d%%\n", g->econ.inflationPct);
     printf("\n");
 
+    /* D21: the rate a new loan would be written at now, not the stored one.
+       Section 5's sample prints 9% during an Economic Recession, which is the
+       stable 8% with the event's relative +15% applied -- so the block has to
+       report the adjusted figure. Player -1 keeps a player-scoped Appendix A
+       rate card out of a board-wide reading. */
     printf("Current Loan Interest\n");
     rule_line('-', 23);
-    printf("%d%%\n", g->econ.interestRatePct);
+    printf("%d%%\n", current_loan_rate(g, -1));
     printf("\n");
 
     rule_line('=', MARKET_RULE);
@@ -769,6 +781,10 @@ void play_round(GameState *g)
     }
     if (g->round % MARKET_EVERY == 0) {
         market_review(g);           /* LK 30-33                            */
+    }
+    if (g->round % EVENT_EVERY == 0) {
+        national_event(g);          /* LK 18: the whole board              */
+        regional_card(g);           /* Table 4: named squares              */
     }
 
     round_summary(g);
