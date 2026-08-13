@@ -10,65 +10,54 @@
  * what is decided. A strategy that wanted to quietly adjust its own balance
  * would have to change its signature, which would be conspicuous.
  *
- * MILESTONE 6 replaces every body here with the four real personalities,
- * each a switch on Player.strat. The signatures are already final, so that
- * milestone touches this file and no other. Until then the placeholders
- * below give every player the same plain behaviour -- enough for the rest of
- * the program to be exercised and observed.
+ * SHAPE. Each public decide_* below splits in two. The RULES come first and
+ * apply to everyone -- Rule 8's monopoly test, D25's purchase cap, LK 27's
+ * one-square-at-a-time -- because a personality is a preference and may not
+ * override the rulebook. What is left is the preference, and that is where
+ * the switch on Player.strat lives. Writing it the other way round would put
+ * four copies of every rule in the file and invite three of them to drift.
+ *
+ * The scalar preferences live in PROFILE below rather than in four copies of
+ * the same function, so section 3 can be read against a table.
  */
 
 #include "types.h"
 
-/* PLACEHOLDER (milestone 6). Rule 5's choice: take it at the asking price,
-   or decline and send it to auction. Every strategy currently buys whatever
-   it can afford, which is deliberately naive -- it keeps property moving so
-   rent, monopolies and auctions all get exercised. */
-bool decide_buy(GameState *g, int p, int sq)
-{
-    /* LK 24's Anti-Speculation Act, and the one regulation a strategy has to
-     * read for itself -- the other seven are percentages that a choke point
-     * applies without anyone asking.
-     *
-     * D25 implements the cap alone and drops the rule's second clause, that
-     * additional purchases require development within five rounds. Enforcing
-     * the cap strictly makes that clause unreachable: the additional purchase
-     * can never happen, so there is nothing to develop and no five rounds to
-     * count. One of the two has to give, and the cap is the half the rule
-     * leads with.
-     *
-     * effect_modifier sums, which would be wrong for a ceiling -- but LK 24
-     * runs one regulation at a time, so at most one such record exists and
-     * the sum is that record.
-     */
-    int cap = effect_modifier(g, EFF_MAX_PROPERTIES, sq, p);
+/* ------------------------------------------------------------- profiles -- */
 
-    if (cap > 0 && count_undeveloped(g, p) >= cap) {
-        return false;
-    }
-
-    return g->players[p].cash >= square_value(g, sq);
-}
-
-/* PLACEHOLDER (milestone 6). Return the amount to bid, or 0 to withdraw
-   permanently from this auction (LK 21).
+/* One row per section 3 personality, indexed by Strategy. Every column cites
+ * the bullet it implements, so the table can be checked against the spec by
+ * eye rather than by reading four functions.
  *
- * minBid is the smallest legal bid right now -- the opening price for the
- * first bidder, the standing bid plus LK 20's increment afterwards. Handing
- * over the floor rather than the current high bid is what lets a strategy
- * answer without recomputing the opening for itself.
- *
- * The placeholder bids the minimum while it stays under 60% of market value
- * and within cash, so auctions run several rounds and then terminate.
+ * Behaviour that is structural rather than scalar -- what a strategy buys,
+ * how it banks -- cannot live here and is a switch further down.
  */
-int decide_bid(GameState *g, int p, int sq, int minBid)
-{
-    int cap = pct_of(square_value(g, sq), 60);
+typedef struct {
+    int  bidCapPct;          /* R4.*: ceiling on a bid, as % of value       */
+    int  maintainBelowPct;   /* R4.*: condition band that triggers upkeep   */
+    int  renovateAbovePct;   /* R4.*: depreciation that triggers renovation */
+    bool hotelsWhileIndebted;/* R4.2: no hotels while a loan is outstanding */
+    bool insureOnlyAfterLoss;/* R4.3: insures only after suffering one      */
+    InsuranceType houseTier; /* R4.*: cover bought on a house property      */
+    InsuranceType hotelTier; /* R4.*: cover bought on a hotel property      */
+} Profile;
 
-    if (minBid > g->players[p].cash || minBid > cap) {
-        return 0;
-    }
-    return minBid;
+/* Milestone 6 step 1 replaces these rows one personality at a time. Until
+   then every row carries the milestone-5 placeholder's numbers, so this
+   commit changes the shape of the file and none of its behaviour. */
+static const Profile PROFILE[] = {
+    /* STRAT_AGGRESSIVE   */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC },
+    /* STRAT_CONSERVATIVE */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC },
+    /* STRAT_RISKTAKER    */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC },
+    /* STRAT_OPPORTUNIST  */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC }
+};
+
+static const Profile *profile(const GameState *g, int p)
+{
+    return &PROFILE[g->players[p].strat];
 }
+
+/* ---------------------------------------------------------- shared rules -- */
 
 /* Rule 8 plus the consequence Rule 9 has for a mortgaged member.
  *
@@ -92,24 +81,112 @@ static bool group_developable(const GameState *g, int p, PropertyGroup grp)
     return true;
 }
 
-/* PLACEHOLDER (milestone 6). Rule 3 step 6: which square to build on, or -1
- * to build nothing. The caller decides house or hotel from the square's
- * current level and executes; this function only chooses.
+/* LK 24's Anti-Speculation Act, and the one regulation a strategy has to be
+ * told about -- the other seven are percentages a choke point applies without
+ * anyone asking.
  *
- * Always the LEAST developed square across every monopolised group. That one
- * rule delivers Rule 9's even building for free: a square can only ever be
- * one level ahead of its groupmates, because the moment it is, one of them
- * becomes the minimum and takes the next building. No explicit evenness check
- * is needed anywhere, and the DEBUG invariant in game.c confirms it holds.
+ * D25 implements the cap alone and drops the rule's second clause, that
+ * additional purchases require development within five rounds. Enforcing the
+ * cap strictly makes that clause unreachable: the additional purchase can
+ * never happen, so there is nothing to develop and no five rounds to count.
  *
- * A square already at MAX_HOUSES is the minimum only once every other member
- * has four too, which is exactly Rule 10's precondition for a hotel -- so the
- * upgrade falls out of the same comparison rather than needing its own pass.
+ * effect_modifier sums, which would be wrong for a ceiling -- but LK 24 runs
+ * one regulation at a time, so at most one such record exists and the sum is
+ * that record.
+ */
+static bool purchase_permitted(const GameState *g, int p, int sq)
+{
+    int cap = effect_modifier(g, EFF_MAX_PROPERTIES, sq, p);
+
+    return !(cap > 0 && count_undeveloped(g, p) >= cap);
+}
+
+/* ------------------------------------------------------------- purchase -- */
+
+/* Rule 5's choice: take it at the asking price, or decline and send it to
+ * auction. The rules have already had their say by the time this is called;
+ * what is left is whether this personality wants it at that price.
+ */
+static bool wants_to_buy(GameState *g, int p, int sq)
+{
+    switch (g->players[p].strat) {
+    case STRAT_AGGRESSIVE:
+    case STRAT_CONSERVATIVE:
+    case STRAT_RISKTAKER:
+    case STRAT_OPPORTUNIST:
+        return g->players[p].cash >= square_value(g, sq);
+    }
+    return false;
+}
+
+bool decide_buy(GameState *g, int p, int sq)
+{
+    if (!purchase_permitted(g, p, sq)) {
+        return false;
+    }
+    return wants_to_buy(g, p, sq);
+}
+
+/* -------------------------------------------------------------- auction -- */
+
+/* Return the amount to bid, or 0 to withdraw permanently from this auction
+ * (LK 21).
+ *
+ * minBid is the smallest legal bid right now -- the opening price for the
+ * first bidder, the standing bid plus LK 20's increment afterwards. Handing
+ * over the floor rather than the current high bid is what lets a strategy
+ * answer without recomputing the opening for itself.
+ *
+ * Every personality bids the minimum and differs only in how far it will
+ * follow, which is D9's reading of section 3: the ceiling is the personality,
+ * the increment is the rule.
+ */
+int decide_bid(GameState *g, int p, int sq, int minBid)
+{
+    int ceiling = pct_of(square_value(g, sq), profile(g, p)->bidCapPct);
+
+    if (minBid > g->players[p].cash || minBid > ceiling) {
+        return 0;
+    }
+    return minBid;
+}
+
+/* --------------------------------------------------------- construction -- */
+
+/* Rule 3 step 6: which square to build on, or -1 to build nothing.
+ *
+ * The SELECTION is Rule 9 and belongs to everyone: always the least developed
+ * square across every monopolised group. That one rule delivers even building
+ * for free -- a square can only ever be one level ahead of its groupmates,
+ * because the moment it is, one of them becomes the minimum and takes the
+ * next building. A square already at MAX_HOUSES is the minimum only once
+ * every other member has four too, which is exactly Rule 10's precondition
+ * for a hotel, so the upgrade falls out of the same comparison.
+ *
+ * The personality decides only whether to build the thing selected.
  *
  * Affordability is checked here rather than left to charge(): building is
  * voluntary, and a player who would have to sell buildings to fund a building
  * should simply not build. See build_step in game.c.
  */
+static bool wants_to_build(GameState *g, int p, int sq, bool hotel)
+{
+    (void)sq;
+
+    if (hotel && !profile(g, p)->hotelsWhileIndebted && g->players[p].loan.active) {
+        return false;                            /* R4.2                    */
+    }
+
+    switch (g->players[p].strat) {
+    case STRAT_AGGRESSIVE:
+    case STRAT_CONSERVATIVE:
+    case STRAT_RISKTAKER:
+    case STRAT_OPPORTUNIST:
+        return true;
+    }
+    return false;
+}
+
 int decide_build(GameState *g, int p)
 {
     int i, best = -1, bestLevel = MAX_HOUSES + 1;
@@ -138,6 +215,9 @@ int decide_build(GameState *g, int p)
         if (g->players[p].cash < building_cost(g, i, level == MAX_HOUSES)) {
             continue;
         }
+        if (!wants_to_build(g, p, i, level == MAX_HOUSES)) {
+            continue;
+        }
 
         best      = i;
         bestLevel = level;
@@ -146,26 +226,20 @@ int decide_build(GameState *g, int p)
     return best;
 }
 
-/* Table 3's second band edge. Above it a building still collects 90% or
-   100% of its rent; at 74% the factor drops to 75%, which is the first cut
-   worth paying to avoid. */
-#define MAINTAIN_BELOW_PCT 75
+/* --------------------------------------------------------- maintenance --- */
 
-/* PLACEHOLDER (milestone 6). Rule 3 step 1 and LK 27: which building to
- * restore to full condition, or -1 for none. One square per call; game.c
- * repeats until this stops offering, which is how LK 27's "any number of
- * buildings if affordable" is expressed without this function executing
- * anything.
+/* Rule 3 step 1 and LK 27: which building to restore to full condition, or
+ * -1 for none. One square per call; game.c repeats until this stops offering,
+ * which is how LK 27's "any number of buildings if affordable" is expressed
+ * without this function executing anything.
  *
- * Maintaining at 75% rather than on the way down from 100 is the cheap
- * reading of Table 3: condition falls 2% a round, so a property serviced at
- * the band edge collects full rent for the seven rounds it takes to slip
- * back, and pays once for them. Servicing at 99% would pay the same price
- * for one round of benefit.
+ * The scan is shared; the band each personality tolerates before paying is
+ * PROFILE's, because that is the whole of the difference between an owner who
+ * protects its rent and one that lets the buildings rot.
  */
 int decide_maintenance(GameState *g, int p)
 {
-    int i;
+    int i, threshold = profile(g, p)->maintainBelowPct;
 
     for (i = 0; i < NUM_SQUARES; i++) {
         const Square *s = &g->board[i];
@@ -173,7 +247,7 @@ int decide_maintenance(GameState *g, int p)
         if (s->owner != p || development_level(g, i) == 0) {
             continue;
         }
-        if (s->conditionPct >= MAINTAIN_BELOW_PCT) {
+        if (s->conditionPct >= threshold) {
             continue;
         }
         if (g->players[p].cash < maintenance_cost(g, i)) {
@@ -185,18 +259,11 @@ int decide_maintenance(GameState *g, int p)
     return -1;
 }
 
-/* Above this much wear, the placeholder pays to reverse it. Section 3 gives
-   the Conservative Banker 10% and the Opportunistic Trader 15%, so this sits
-   at the lower of the two and milestone 6 splits them. */
-#define RENOVATE_ABOVE_PCT 10
+/* ---------------------------------------------------------- renovation --- */
 
-/* PLACEHOLDER (milestone 6). LK 17: renovation is offered only on a square
- * the player is standing on and already owns, so the square comes in rather
- * than being searched for -- the caller in land_on already knows it.
- *
- * Worth doing at all only when there is something to reverse. A renovation
- * costs a tenth of market value and buys back the depreciation and the age;
- * on an undepreciated property it buys nothing.
+/* LK 17: renovation is offered only on a square the player is standing on and
+ * already owns, so the square comes in rather than being searched for -- the
+ * caller in land_on already knows it.
  */
 bool decide_renovate(GameState *g, int p, int sq)
 {
@@ -206,43 +273,49 @@ bool decide_renovate(GameState *g, int p, int sq)
         return false;
     }
 
-    /* LK 29 first. Structural damage is the worse of the two -- it costs
-       value, rent and upkeep all at once, where depreciation costs only
-       value -- so it is worth clearing before the wear is, and at a
-       different price against a different base. */
+    /* LK 29 first, and for everyone. Structural damage is the worse of the
+       two -- it costs value, rent and upkeep at once, where depreciation
+       costs only value -- so it is worth clearing before the wear is, and at
+       a different price against a different base. */
     if (s->structDamaged) {
         return g->players[p].cash >= structural_renovation_cost(g, sq);
     }
 
-    if (s->depreciationPct <= RENOVATE_ABOVE_PCT) {
+    if (s->depreciationPct <= profile(g, p)->renovateAbovePct) {
         return false;
     }
 
     return g->players[p].cash >= pct_of(square_value(g, sq), RENOVATE_PCT);
 }
 
-/* PLACEHOLDER (milestone 6). R1.9 and S1.2: landing on an insurance square
- * buys or renews ONE policy on ONE property, so this returns a single square
- * or -1 and writes the tier it wants to *tier.
+/* ------------------------------------------------------------ insurance -- */
+
+/* R1.9 and S1.2: landing on an insurance square buys or renews ONE policy on
+ * ONE property, so this returns a single square or -1 and writes the tier it
+ * wants to *tier.
  *
- * Only developed property is worth insuring, and that is not a strategy
- * preference but what the rules make true: LK 10's disasters strike developed
- * properties, D1 prices the repair off the buildings, and a vacant lot has
- * neither. Insuring one would be paying a premium against a peril that cannot
- * reach it.
- *
- * Basic everywhere, which milestone 6 replaces -- section 3 wants Basic on
- * houses and Comprehensive on hotels for the Aggressive Investor, and nothing
- * at all for the Risk Taker until it has already lost something.
+ * Only developed property is considered, and that is not a preference but
+ * what the rules make true: LK 10's disasters strike developed properties and
+ * D1 prices the repair off the buildings, so a vacant lot has neither
+ * exposure nor a repair bill. Insuring one would be paying a premium against
+ * a peril that cannot reach it.
  */
 int decide_insurance(GameState *g, int p, InsuranceType *tier)
 {
-    int i;
+    const Profile *pr = profile(g, p);
+    int            i;
 
-    *tier = INS_BASIC;
+    *tier = INS_NONE;
+
+    /* R4.3: the Risk Taker buys nothing until something has already gone
+       wrong. sufferedLoss is set by the disaster roll and never cleared. */
+    if (pr->insureOnlyAfterLoss && !g->players[p].sufferedLoss) {
+        return -1;
+    }
 
     for (i = 0; i < NUM_SQUARES; i++) {
-        const Square *s = &g->board[i];
+        const Square *s    = &g->board[i];
+        InsuranceType want;
 
         if (s->owner != p || s->policy != INS_NONE) {
             continue;
@@ -250,42 +323,43 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
         if (development_level(g, i) == 0) {
             continue;
         }
-        if (g->players[p].cash < premium(g, i, INS_BASIC)) {
+
+        want = s->hotel ? pr->hotelTier : pr->houseTier;
+        if (want == INS_NONE) {
             continue;
         }
+        if (g->players[p].cash < premium(g, i, want)) {
+            continue;
+        }
+
+        *tier = want;
         return i;
     }
 
     return -1;
 }
 
-/* How close to maturity a loan must be before the placeholder buys time
-   rather than hoping for another Bank landing. */
+/* --------------------------------------------------------------- banking -- */
+
+/* How close to maturity a loan must be before a strategy buys time rather
+   than hoping for another Bank landing. */
 #define EXTEND_WITHIN_ROUNDS 5
 
-/* PLACEHOLDER (milestone 6). R1.8 and LK 5: the Bank square offers five
- * actions and grants exactly one per landing, so this returns the first that
- * applies and the order below IS the policy.
+/* R1.8 and LK 5: the Bank square offers five actions and grants exactly one
+ * per landing, so each arm returns the first that applies and its order IS
+ * that personality's policy.
  *
- * Settle before part-paying, part-pay before buying time, buy time before
- * borrowing more. That ranking is not arbitrary: under D4 the principal
- * compounds every round at the rate it was issued at, and R1.8 makes this
- * square the only place it can ever be paid down. A player who passes up a
- * chance to reduce the balance may not get another for twenty rounds, by
- * which time 8% per round has multiplied it by four and a half.
- *
- * Borrowing is deliberately reactive -- only when cash has fallen below half
- * the starting stake, and only for the shortfall rather than the maximum.
- * Taking the LK 2 ceiling on principle is the Risk Taker's move and belongs
- * in milestone 6; here it would simply bankrupt all four players the same
- * way at the same time and hide everything else this milestone added.
+ * Under D4 the principal compounds every round at the rate it was issued at,
+ * and R1.8 makes this square the only place it can ever be paid down. A
+ * player who passes up a chance to reduce the balance may not get another for
+ * twenty rounds, by which time 8% per round has multiplied it by four and a
+ * half. That is what makes the ordering below a real strategic difference
+ * rather than a cosmetic one.
  */
-BankAction decide_bank(GameState *g, int p, int *amount)
+static BankAction bank_baseline(GameState *g, int p, int *amount)
 {
     const Player *pl = &g->players[p];
     int           capacity;
-
-    *amount = 0;
 
     if (pl->loan.active) {
         if (pl->cash >= pl->loan.principal) {
@@ -318,5 +392,19 @@ BankAction decide_bank(GameState *g, int p, int *amount)
         }
     }
 
+    return BANK_NONE;
+}
+
+BankAction decide_bank(GameState *g, int p, int *amount)
+{
+    *amount = 0;
+
+    switch (g->players[p].strat) {
+    case STRAT_AGGRESSIVE:
+    case STRAT_CONSERVATIVE:
+    case STRAT_RISKTAKER:
+    case STRAT_OPPORTUNIST:
+        return bank_baseline(g, p, amount);
+    }
     return BANK_NONE;
 }
