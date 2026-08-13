@@ -719,6 +719,16 @@ int square_rent(const GameState *g, int sq, int diceTotal)
         return 0;
     }
 
+    /* Appendix A's Political Rally shuts a square for two rounds. Read before
+       the type switch because it applies whatever the square is, and read
+       through effect_active rather than effect_modifier because EFF_CLOSED
+       carries no magnitude to sum -- it is a flag, and its presence is the
+       whole of its meaning. (LK 26's separate closure, for a building decayed
+       below 25%, already falls out of condition_rent_pct returning zero.) */
+    if (effect_active(g, EFF_CLOSED, sq, s->owner)) {
+        return 0;
+    }
+
     switch (s->type) {
     case SQ_PROPERTY:
         if (s->hotel) {

@@ -63,6 +63,9 @@ bool game_init(GameState *g, const char *csvPath)
     g->econ.lastDeclineGroup  = GRP_NONE;
     g->econ.activeCard        = -1;
 
+    /* Shuffled once, then walked in order for the rest of the game (App A). */
+    deck_init(g);
+
     g->round = 0;
     return true;
 }
@@ -482,9 +485,15 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         bank_visit(g, p);
         break;
 
-    /* Still to come, each in its own step. */
-    case SQ_INSURANCE:
+    /* Appendix A. Squares 7, 22 and 36 only -- square 2 is SQ_COMMUNITY and
+       levies rather than draws (D17), which is why there are three card
+       squares on this board and not four. */
     case SQ_EVENT:
+        draw_event_card(g, p);
+        break;
+
+    /* Still to come, in milestone 5. */
+    case SQ_INSURANCE:
         break;
     }
 }

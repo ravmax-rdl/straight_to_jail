@@ -416,6 +416,7 @@ int  maintenance_cost(const GameState *g, int sq);
 void effect_push(GameState *g, EffectKind kind, EffectScope scopeKind, int scope,
                  int magnitudePct, int owner, int rounds);
 int  effect_modifier(const GameState *g, EffectKind kind, int square, int player);
+bool effect_active(const GameState *g, EffectKind kind, int square, int player);
 void tick_effects(GameState *g);
 void tick_cooldowns(GameState *g);
 
@@ -427,6 +428,12 @@ void market_review(GameState *g);
 void national_event(GameState *g);
 void regional_card(GameState *g);
 void government_regulation(GameState *g);
+
+/* events.c -- Appendix A's deck. Shuffled once in game_init and walked as a
+   circular queue, which is what "returned to the bottom" means for an array
+   plus an index: nothing moves and every card appears before any repeats. */
+void deck_init(GameState *g);
+void draw_event_card(GameState *g, int p);
 
 /* events.c -- LK 36 block queries. game.c owns every formatted block, so
    these answer rather than print. Both read the live registry, so there is no

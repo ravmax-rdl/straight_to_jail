@@ -114,6 +114,12 @@ int decide_build(GameState *g, int p)
 {
     int i, best = -1, bestLevel = MAX_HOUSES + 1;
 
+    /* Appendix A's Labour Strike stops this player building for two rounds.
+       A flag rather than a percentage, so it is read for presence. */
+    if (effect_active(g, EFF_CONSTRUCTION_SUSPENDED, -1, p)) {
+        return -1;
+    }
+
     for (i = 0; i < NUM_SQUARES; i++) {
         const Square *s = &g->board[i];
         int           level;

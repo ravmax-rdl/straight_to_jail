@@ -117,6 +117,34 @@ int effect_modifier(const GameState *g, EffectKind kind, int square, int player)
     return total;
 }
 
+/* Is any effect of this kind in force here?
+ *
+ * Three of the effect kinds -- EFF_CLOSED, EFF_CONSTRUCTION_SUSPENDED and the
+ * risk weights -- carry no percentage at all. Their presence is their whole
+ * meaning, so summing magnitudes would report a two-round shutdown as zero,
+ * which reads identically to no shutdown. Callers of those ask this instead.
+ */
+bool effect_active(const GameState *g, EffectKind kind, int square, int player)
+{
+    int i;
+
+    for (i = 0; i < g->econ.effectCount; i++) {
+        const Effect *e = &g->econ.effects[i];
+
+        if (e->kind != kind) {
+            continue;
+        }
+        if (e->owner >= 0 && e->owner != player) {
+            continue;
+        }
+        if (scope_matches(g, e, square, player)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* Age every record by one round and compact the expired out of the array.
  *
  * Removal is the whole of LK 35. "Values revert to the market-adjusted
@@ -647,4 +675,273 @@ void government_regulation(GameState *g)
     if (idx == REG_LUXURY_TAX) {
         levy_luxury_tax(g);
     }
+}
+
+/* ------------------------------------------- the National Event Card deck -- */
+/*
+ * Appendix A. Twenty cards, drawn only by landing on square 7, 22 or 36 --
+ * square 2 levies rather than draws (D17), so there are three card squares
+ * and not four. This is a separate system from LK 18's national events
+ * despite the similar name: those fire on a clock and reach everyone, these
+ * are drawn by one player and attach to that player.
+ *
+ * "Returned to the bottom of the deck" is a circular queue over a fixed
+ * array: nothing moves, the head index advances, and the twentieth draw wraps
+ * to the first card again. O(1) per draw, no shifting, and no allocation
+ * (R0.5). Because the array is shuffled once and never reordered, every card
+ * appears exactly once before any repeats -- which is what "returned to the
+ * bottom" is for.
+ */
+
+typedef enum {
+    CARD_TOURISM_HYPE, CARD_FUEL_SHORTAGE, CARD_HEAVY_FLOODS, CARD_POLITICAL_RALLY,
+    CARD_STOCK_RISE, CARD_DOWNTURN, CARD_HOUSING_SUBSIDY, CARD_RATE_CUT,
+    CARD_RATE_RISE, CARD_TAX_AMNESTY, CARD_POWER_FAILURE, CARD_FOREIGN_FUNDING,
+    CARD_PORT_EXPANSION, CARD_FESTIVAL, CARD_LABOUR_STRIKE, CARD_INSURANCE_DISCOUNT,
+    CARD_REVALUATION, CARD_CURRENCY_DEPRECIATION, CARD_GOVERNMENT_GRANT,
+    CARD_NATIONAL_DISASTER,
+    CARD_COUNT
+} EventCardId;
+
+static const char *CARD_NAMES[CARD_COUNT] = {
+    "Tourism Hype", "Fuel Shortage", "Heavy Floods", "Political Rally",
+    "Stock Market Rise", "Economic Downturn", "Housing Subsidy", "Interest Rate Cut",
+    "Interest Rate Increase", "Tax Amnesty", "Power Failure", "Foreign Funding",
+    "Port Expansion", "Festival Season", "Labour Strike", "Insurance Discount",
+    "Property Revaluation", "Currency Depreciation", "Government Grant",
+    "National Disaster"
+};
+
+/* Every card announces itself in the same three-line shape as an economic
+   event: heading, name, what it does. The cards that pick a target when they
+   fire add a fourth line naming it, since "a random coastal property" is not
+   something a static string can say. */
+static const char *CARD_DETAILS[CARD_COUNT] = {
+    "Your hotel rents double for five rounds.",
+    "Your railway rents double for five rounds.",
+    "Floods strike the coast.",
+    "One of your properties is shut by a rally.",
+    "Your property values rise by 10%.",
+    "Your property values fall by 15%.",
+    "Your construction costs fall by 30%.",
+    "Your loan interest falls by 2 percentage points.",
+    "Your loan interest rises by 2 percentage points.",
+    "Outstanding taxes are forgiven.",
+    "Your utility rents halve for three rounds.",
+    "Your commercial property values rise by 15%.",
+    "Your railway values rise by 20%.",
+    "Your hotel rents rise by 50%.",
+    "Your construction is suspended for two rounds.",
+    "Your premiums fall by 20%.",
+    "One colour group rises in value by 15%.",
+    "Your construction costs rise by 10%.",
+    "A government grant is awarded.",
+    "Disaster strikes a developed property."
+};
+
+#define CARD_GRANT_AMOUNT   5000
+#define CARD_AMNESTY_AMOUNT 2000
+
+/* Fisher-Yates over the fixed array, called once from game_init.
+ *
+ * Drawing an index at random on every draw would be simpler and wrong: it
+ * would let the same card come up twice before others had appeared at all,
+ * and Appendix A's return-to-the-bottom rule exists precisely to stop that.
+ * Shuffling once and walking the order preserves it.
+ */
+void deck_init(GameState *g)
+{
+    int i;
+
+    for (i = 0; i < DECK_SIZE; i++) {
+        g->deck.cards[i] = i;
+    }
+    for (i = DECK_SIZE - 1; i > 0; i--) {
+        int j   = rng_range(0, i);
+        int tmp = g->deck.cards[i];
+
+        g->deck.cards[i] = g->deck.cards[j];
+        g->deck.cards[j] = tmp;
+    }
+    g->deck.head = 0;
+}
+
+/* Pick a square p owns, or -1. Reservoir choice again, for the two cards that
+   strike somewhere of the drawer's rather than somewhere of the board's. */
+static int random_owned_square(GameState *g, int p)
+{
+    int i, pick = -1, seen = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner != p) {
+            continue;
+        }
+        seen++;
+        if (rng_range(1, seen) == 1) {
+            pick = i;
+        }
+    }
+    return pick;
+}
+
+/* Pick a square that matches a predicate over the whole board, or -1. */
+static int random_square_where(GameState *g, unsigned regionMask, bool developedOnly)
+{
+    int i, pick = -1, seen = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+
+        if (s->owner < 0) {
+            continue;
+        }
+        if (regionMask != 0u && (s->regions & regionMask) == 0u) {
+            continue;
+        }
+        if (developedOnly && development_level(g, i) == 0) {
+            continue;
+        }
+        seen++;
+        if (rng_range(1, seen) == 1) {
+            pick = i;
+        }
+    }
+    return pick;
+}
+
+/* Mark a property damaged (LK 11).
+ *
+ * Deliberately only the flag. Milestone 5 owns what damage MEANS -- the rent
+ * guard that stops a damaged building earning, and the automatic repair that
+ * lifts it again -- and those two have to arrive together. Honouring the flag
+ * here, before repairs exist, would kill the property for the rest of the
+ * game rather than until its owner could afford the work.
+ */
+static void damage_square(GameState *g, int sq)
+{
+    if (sq < 0) {
+        return;
+    }
+    g->board[sq].damaged = true;
+    printf("%s has been damaged.\n", g->board[sq].name);
+}
+
+/* Appendix A's twenty, as a switch rather than a table.
+ *
+ * The board-wide systems above are table rows because they differ only in
+ * their numbers. These do not: five of them act immediately instead of
+ * pushing anything, three choose a target at random when they fire, and the
+ * durations range from two rounds to fifteen. A table would need a column per
+ * exception and a switch to read them, which is the switch below plus a
+ * table.
+ *
+ * Everything pushed here carries owner = p. That is what makes a card the
+ * drawer's rather than the board's: effect_modifier will only apply it when
+ * reading a value for that player, so Tourism Hype lifts the hotel rents this
+ * player collects and nobody else's.
+ */
+static void apply_card(GameState *g, int p, int card)
+{
+    char b[FMT_BUF];
+    int  i, sq;
+
+    switch ((EventCardId)card) {
+    case CARD_TOURISM_HYPE:
+        effect_push(g, EFF_HOTEL_RENT_MUL, SCOPE_GLOBAL, 0, +100, p, 5);
+        break;
+    case CARD_FUEL_SHORTAGE:
+        effect_push(g, EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, +100, p, 5);
+        break;
+    case CARD_HEAVY_FLOODS:
+        damage_square(g, random_square_where(g, REGION_COASTAL, false));
+        break;
+    case CARD_POLITICAL_RALLY:
+        sq = random_owned_square(g, p);
+        if (sq >= 0) {
+            effect_push(g, EFF_CLOSED, SCOPE_SQUARE, sq, 0, p, 2);
+            printf("%s is closed for two rounds.\n", g->board[sq].name);
+        }
+        break;
+    case CARD_STOCK_RISE:
+        effect_push(g, EFF_VALUE_MUL, SCOPE_GLOBAL, 0, +10, p, CARD_ROUNDS);
+        break;
+    case CARD_DOWNTURN:
+        effect_push(g, EFF_VALUE_MUL, SCOPE_GLOBAL, 0, -15, p, CARD_ROUNDS);
+        break;
+    case CARD_HOUSING_SUBSIDY:
+        effect_push(g, EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, -30, p, CARD_ROUNDS);
+        break;
+    case CARD_RATE_CUT:
+        /* D21: percentage points, not a relative shift. */
+        effect_push(g, EFF_INTEREST_ADD, SCOPE_GLOBAL, 0, -2, p, CARD_ROUNDS);
+        break;
+    case CARD_RATE_RISE:
+        effect_push(g, EFF_INTEREST_ADD, SCOPE_GLOBAL, 0, +2, p, CARD_ROUNDS);
+        break;
+    case CARD_TAX_AMNESTY:
+        for (i = 0; i < NUM_PLAYERS; i++) {
+            if (!g->players[i].bankrupt) {
+                credit(g, i, CARD_AMNESTY_AMOUNT);
+            }
+        }
+        printf("Every player receives LKR %s.\n", fmt_lkr(b, CARD_AMNESTY_AMOUNT));
+        break;
+    case CARD_POWER_FAILURE:
+        effect_push(g, EFF_UTILITY_RENT_MUL, SCOPE_GLOBAL, 0, -50, p, 3);
+        break;
+    case CARD_FOREIGN_FUNDING:
+        effect_push(g, EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COMMERCIAL, +15, p,
+                    CARD_ROUNDS);
+        break;
+    case CARD_PORT_EXPANSION:
+        /* The four railways, named individually. D14's COMMERCIAL tag also
+           covers Pettah, Maradana and Galle Face, so it is the wrong reach
+           for a card about stations. */
+        for (i = 0; i < NUM_SQUARES; i++) {
+            if (g->board[i].type == SQ_RAILWAY) {
+                effect_push(g, EFF_VALUE_MUL, SCOPE_SQUARE, i, +20, p, CARD_ROUNDS);
+            }
+        }
+        break;
+    case CARD_FESTIVAL:
+        effect_push(g, EFF_HOTEL_RENT_MUL, SCOPE_GLOBAL, 0, +50, p, CARD_ROUNDS);
+        break;
+    case CARD_LABOUR_STRIKE:
+        effect_push(g, EFF_CONSTRUCTION_SUSPENDED, SCOPE_GLOBAL, 0, 0, p, 2);
+        break;
+    case CARD_INSURANCE_DISCOUNT:
+        effect_push(g, EFF_PREMIUM_MUL, SCOPE_GLOBAL, 0, -20, p, CARD_ROUNDS);
+        break;
+    case CARD_REVALUATION:
+        effect_push(g, EFF_VALUE_MUL, SCOPE_GROUP, rng_range(0, GRP_COUNT - 1), +15, p,
+                    CARD_ROUNDS);
+        break;
+    case CARD_CURRENCY_DEPRECIATION:
+        effect_push(g, EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, +10, p, CARD_ROUNDS);
+        break;
+    case CARD_GOVERNMENT_GRANT:
+        i = rng_range(0, NUM_PLAYERS - 1);
+        credit(g, i, CARD_GRANT_AMOUNT);
+        printf("%s receives LKR %s.\n", g->players[i].name,
+               fmt_lkr(b, CARD_GRANT_AMOUNT));
+        break;
+    case CARD_NATIONAL_DISASTER:
+        damage_square(g, random_square_where(g, 0u, true));
+        break;
+    case CARD_COUNT:
+        break;
+    }
+}
+
+/* Squares 7, 22 and 36. Read the top card, advance the head, execute. */
+void draw_event_card(GameState *g, int p)
+{
+    int card = g->deck.cards[g->deck.head];
+
+    g->deck.head = (g->deck.head + 1) % DECK_SIZE;
+
+    printf("National Event Card\n");
+    printf("%s\n", CARD_NAMES[card]);
+    printf("%s\n", CARD_DETAILS[card]);
+    apply_card(g, p, card);
 }
