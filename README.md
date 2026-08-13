@@ -59,7 +59,7 @@ Every decision — purchases, bids, loans, insurance, construction, renovation �
 | `types.h` | Shared structs, enums, constants, prototypes |
 | `board.c` | The 40 squares, movement, rent/value calculation |
 | `players.c` | The four strategy decision engines |
-| `finance.c` | Loans, insurance, auctions, taxes, depreciation, bankruptcy |
+| `finance.c` | Loans, insurance, auctions, taxes, debt recovery, bankruptcy |
 | `events.c` | Economic events, event cards, regulations, disasters, market cycles |
 | `game.c` | Round/turn controller and the economic-cadence scheduler |
 | `main.c` | Entry point |
@@ -90,14 +90,42 @@ program works from either the repository root or the source directory. Give a pa
 argument to override the search. If the file cannot be found or is malformed, the program prints
 a diagnostic to `stderr` and exits 1 without writing anything to `stdout`.
 
+## Verifying a build
+
+There is no test binary — the mandated `gcc *.c -o monopoly` glob cannot tolerate a second
+`main`. Verification is therefore reproducible runs plus a debug build that asserts the rules
+that are otherwise silent when broken:
+
+```bash
+gcc -std=c99 -Wall -Wextra -pedantic *.c -o monopoly   # must be silent
+gcc -std=c99 -Wall -Wextra -pedantic -g -DDEBUG *.c -o debug
+./monopoly 42 > a.txt && ./monopoly 42 > b.txt && diff a.txt b.txt   # must be empty
+```
+
+`-DDEBUG` enables invariant guards on Rule 9's even building, Rule 10's houses-or-hotel
+exclusion, LK 3's loan locks and the effect registry's capacity. They abort rather than warn, so
+a silent run is the result you want.
+
 ## Status
 
-🚧 **Milestone 1 complete** — board, movement, round and turn loops, round-end blocks. The
-economy, banking, and the four strategies are still to come.
+✅ **Complete** — all six milestones. Board and loops, transactions and jail, development and
+banking and failure, the living economy, insurance and ageing, and the four §3 personalities,
+followed by a line-by-line audit of every §5 output template.
+
+Two known limitations, both documented rather than hidden:
+
+- **A mortgage cannot be lifted.** The spec defines mortgaging as a debt-recovery step (**D11**)
+  and never gives a redemption price, so a mortgaged property stays mortgaged: it collects no
+  rent and bars its colour group from development for the rest of the game. This makes the
+  recovery ladder a one-way door and is the main reason the most cash-stressed personality
+  struggles to reach hotels.
+- **§5 names its boomed groups regionally** ("Southern Province"), while **R3.21** and Rule-LK
+  30–33 are explicit that a *colour group* booms. The block's format is reproduced exactly; the
+  names printed are the board's own groups.
 
 | Document | What it is |
 |----------|------------|
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D27** — including the three where the lecturer's clarifications override the PDF |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D29** — including the three where the lecturer's clarifications override the PDF |
 | [`docs/superpowers/specs/straight-to-jail-architecture-design.md`](docs/superpowers/specs/straight-to-jail-architecture-design.md) | Architecture rationale — the `Rent.csv` loader, the effect registry, the choke points, the round scheduler |
 | [`docs/superpowers/plans/straight-to-jail-staged.md`](docs/superpowers/plans/straight-to-jail-staged.md) | The implementation plan — six milestones, every step compiling clean and running |
 | [`docs/reference/`](docs/reference/) | Three reference notes — the C, the data structures, the economic mathematics |

@@ -14,20 +14,20 @@ such override is a numbered decision so it can be defended at the viva.
 
 ## R0 — Build & environment
 
-- [ ] **R0.1** Pure C (C99), standard library only. No external dependencies.
-- [ ] **R0.2** `gcc *.c -o monopoly` compiles with **zero errors and zero warnings** (§4). A `Makefile` may exist for convenience but must never be required.
-- [ ] **R0.3** At minimum these source files, split exactly by this responsibility (Table 5): `types.h`, `board.c`, `players.c`, `finance.c`, `events.c`, `game.c`, `main.c`.
-- [ ] **R0.4** No global variables. A single `GameState` struct on `main`'s stack, passed explicitly.
-- [ ] **R0.5** **No dynamic memory and no linked lists, anywhere, including the CSV reader.** Every collection is a fixed-size array indexed by `int`. No `malloc`, no `calloc`, no `realloc`, no `free`, no self-referential node structs, and no POSIX `getline` (it allocates, and is not C99). Nothing in the spec needs them — all sizes are known at compile time (40 squares, 4 players, 22 properties, 20 cards, 8 groups), and the CSV is read line-by-line into a fixed stack buffer straight into `g->board`.
-- [ ] **R0.6** All *stored* money is `int`. Ratio and interest arithmetic is computed in `double` and rounded to the nearest `int` at the boundary, through one helper (decision **D6′**).
-- [ ] **R0.7** All randomness via `srand`/`rand`. Seed = `argv[1]` if given, else `time(NULL)`, so development runs are reproducible.
-- [ ] **R0.8** Zero user interaction after launch (§4). No `scanf`, no `getchar`.
-- [ ] **R0.9** No `math.h`. `round()` risks needing `-lm`, which the mandated `gcc *.c -o monopoly` line does not supply. Rounding is arithmetic (see **D6′**).
-- [ ] **R0.10** **Per-property rent data is read from `assets/Rent.csv` at runtime using file handling** — `fopen`/`fgets`/`fclose` over fixed stack buffers. The values are data, not code: no transcribed copy of the CSV exists in any source file. Location and failure policy are decision **D27**.
+- [x] **R0.1** Pure C (C99), standard library only. No external dependencies.
+- [x] **R0.2** `gcc *.c -o monopoly` compiles with **zero errors and zero warnings** (§4). A `Makefile` may exist for convenience but must never be required.
+- [x] **R0.3** At minimum these source files, split exactly by this responsibility (Table 5): `types.h`, `board.c`, `players.c`, `finance.c`, `events.c`, `game.c`, `main.c`.
+- [x] **R0.4** No global variables. A single `GameState` struct on `main`'s stack, passed explicitly.
+- [x] **R0.5** **No dynamic memory and no linked lists, anywhere, including the CSV reader.** Every collection is a fixed-size array indexed by `int`. No `malloc`, no `calloc`, no `realloc`, no `free`, no self-referential node structs, and no POSIX `getline` (it allocates, and is not C99). Nothing in the spec needs them — all sizes are known at compile time (40 squares, 4 players, 22 properties, 20 cards, 8 groups), and the CSV is read line-by-line into a fixed stack buffer straight into `g->board`.
+- [x] **R0.6** All *stored* money is `int`. Ratio and interest arithmetic is computed in `double` and rounded to the nearest `int` at the boundary, through one helper (decision **D6′**).
+- [x] **R0.7** All randomness via `srand`/`rand`. Seed = `argv[1]` if given, else `time(NULL)`, so development runs are reproducible.
+- [x] **R0.8** Zero user interaction after launch (§4). No `scanf`, no `getchar`.
+- [x] **R0.9** No `math.h`. `round()` risks needing `-lm`, which the mandated `gcc *.c -o monopoly` line does not supply. Rounding is arithmetic (see **D6′**).
+- [x] **R0.10** **Per-property rent data is read from `assets/Rent.csv` at runtime using file handling** — `fopen`/`fgets`/`fclose` over fixed stack buffers. The values are data, not code: no transcribed copy of the CSV exists in any source file. Location and failure policy are decision **D27**.
 
 ## R1 — Board & entities
 
-- [ ] **R1.1** 40 squares, indexed 0–39 clockwise (Table 1):
+- [x] **R1.1** 40 squares, indexed 0–39 clockwise (Table 1):
 
 | # | Square | # | Square | # | Square | # | Square |
 |---|--------|---|--------|---|--------|---|--------|
@@ -44,7 +44,7 @@ such override is a numbered decision so it can be defended at the viva.
 
 - [x] **R1.2** Square 2 is a **Community Development Fund** square, not a National Event Card square (decision **D17**). Table 1 types it "Event", but it draws no card — it levies a tax. There are therefore exactly **three** card squares: 7, 22, 36.
 
-- [ ] **R1.3** 22 properties with **individual** purchase prices and base rents, **read at runtime from `assets/Rent.csv`** (**R0.10**, decisions **D7′** and **D27**). The table below records what the file contains as of the current revision; it is documentation, not a specification of compiled-in constants, and the program must reproduce whatever the file says rather than these figures:
+- [x] **R1.3** 22 properties with **individual** purchase prices and base rents, **read at runtime from `assets/Rent.csv`** (**R0.10**, decisions **D7′** and **D27**). The table below records what the file contains as of the current revision; it is documentation, not a specification of compiled-in constants, and the program must reproduce whatever the file says rather than these figures:
 
 | Group | Property | Sq | Price | Base rent |
 |-------|----------|----|-------|-----------|
@@ -71,7 +71,7 @@ such override is a numbered decision so it can be defended at the viva.
 | Dark Blue | Nuwara Eliya | 37 | 10,000 | 1,000 |
 | Dark Blue | Galle Face | 39 | 12,000 | 1,200 |
 
-- [ ] **R1.4** **Group** values (App B) supply construction costs and mortgage value only (decision **D18**). The group Purchase Price column is the loan-calculation basis and is never charged to a buyer; note it equals the cheapest member of each group.
+- [x] **R1.4** **Group** values (App B) supply construction costs and mortgage value only (decision **D18**). The group Purchase Price column is the loan-calculation basis and is never charged to a buyer; note it equals the cheapest member of each group.
 
 | Group | Group base price | House | Hotel | Mortgage value |
 |-------|------------------|-------|-------|----------------|
@@ -84,19 +84,19 @@ such override is a numbered decision so it can be defended at the viva.
 | Green | 8,000 | 2,500 | 10,000 | 4,000 |
 | Dark Blue | 10,000 | 3,000 | 12,000 | 5,000 |
 
-- [ ] **R1.5** Each square tracks: individual price, individual base rent, group mortgage value, house/hotel cost, owner, `purchasedRound`, mortgage status, loan-lock status, insurance policy + remaining rounds, building count, hotel flag, depreciation, condition, unmaintained-round count, damaged and structurally-damaged flags. **Age is derived, not stored** — it is `round − purchasedRound` (**D19**), so it cannot disagree with ownership.
-- [ ] **R1.6** 4 railways: price **1,500**, mortgage value **750**; rent 250/500/1,000/2,000 by count owned by one player (Table 2/7); mortgageable; never developable or insurable.
-- [ ] **R1.7** 2 utilities: price **1,500**, mortgage value **750**; rent = 4× dice (one owned) or 10× dice (both) (Table 8); mortgageable; never developable.
+- [x] **R1.5** Each square tracks: individual price, individual base rent, group mortgage value, house/hotel cost, owner, `purchasedRound`, mortgage status, loan-lock status, insurance policy + remaining rounds, building count, hotel flag, depreciation, condition, unmaintained-round count, damaged and structurally-damaged flags. **Age is derived, not stored** — it is `round − purchasedRound` (**D19**), so it cannot disagree with ownership.
+- [x] **R1.6** 4 railways: price **1,500**, mortgage value **750**; rent 250/500/1,000/2,000 by count owned by one player (Table 2/7); mortgageable; never developable or insurable.
+- [x] **R1.7** 2 utilities: price **1,500**, mortgage value **750**; rent = 4× dice (one owned) or 10× dice (both) (Table 8); mortgageable; never developable.
 - [x] **R1.8** Bank of Ceylon square: exactly **one** loan action per landing — obtain / repay part / repay full / extend / increase (§1.1.4, Rule-LK 5). **A loan can be repaid only by landing here**; there is no other route (clarification, decision **D19**).
 - [x] **R1.9** 2 insurance squares; landing allows purchase or renewal of one policy tier for one property (§1.2).
 
 ## R2 — Traditional rules (Rules 1–15)
 
-- [ ] **R2.1** 4 players; each starts with LKR 30,000 and nothing else (Rule 1).
-- [ ] **R2.2** Turn order by dice roll-off, highest first. Only tied players reroll, and the reroll permutes **only their own positions** — untied players keep their ranks (Rule 2, decision **D8′**).
-- [ ] **R2.3** 8-step turn sequence (Rule 3): penalties → roll → move → landing action → purchase → construction → financial transactions → end. Maintenance happens only in step 1 (Rule-LK 27).
-- [ ] **R2.4** A **turn** is one dice roll for one player unless another condition prevails. A **round** is one turn for every solvent player, in `order[]` sequence (clarification).
-- [ ] **R2.5** Pass or land on GO → +LKR 2,000 (Rule 4).
+- [x] **R2.1** 4 players; each starts with LKR 30,000 and nothing else (Rule 1).
+- [x] **R2.2** Turn order by dice roll-off, highest first. Only tied players reroll, and the reroll permutes **only their own positions** — untied players keep their ranks (Rule 2, decision **D8′**).
+- [x] **R2.3** 8-step turn sequence (Rule 3): penalties → roll → move → landing action → purchase → construction → financial transactions → end. Maintenance happens only in step 1 (Rule-LK 27).
+- [x] **R2.4** A **turn** is one dice roll for one player unless another condition prevails. A **round** is one turn for every solvent player, in `order[]` sequence (clarification).
+- [x] **R2.5** Pass or land on GO → +LKR 2,000 (Rule 4).
 - [x] **R2.6** Unowned purchasable square: buy at its individual list price, or it goes **immediately** to auction (Rule 5).
 - [x] **R2.7** Rent owed on owned, unmortgaged property; mortgaged collects nothing (Rule 7). Landing on one's own property charges nothing.
 - [x] **R2.8** Full colour group = monopoly = only then may build (Rule 8).
@@ -163,20 +163,20 @@ such override is a numbered decision so it can be defended at the viva.
 Each turn a player evaluates every legal action and executes the one best fitting its strategy. Full behaviour lists in
 §3.1–3.4; proxy formulas for the judgment calls in **D9**.
 
-- [ ] **R4.1 Aggressive Investor** — always buys if one future rent remains payable; always bids, up to 120% of estimated value; completes groups first; max houses immediately, hotels ASAP; borrows whenever it lifts projected rent; repays only when cash > 2× loan; Basic insurance on houses, Comprehensive on hotels; never sells voluntarily; covets Galle Face & Nuwara Eliya.
-- [ ] **R4.2 Conservative Banker** — buys only if ≥50% cash remains; bids only below market value; loans only to stave off bankruptcy, repaid at every Bank visit; Comprehensive on every developed property; no hotels while indebted; prefers railways/utilities; no investments during recessions; renovates at >10% depreciation; largest cash reserve.
-- [ ] **R4.3 Risk Taker** — buys everything possible; always borrows the max, refinances often; bids until cash is gone; hotels as early as possible; insures only after a loss; ignores depreciation until forced; sells cheap assets to fund premium ones; invests through downturns.
-- [ ] **R4.4 Opportunistic Trader** — buys only when projected appreciation exceeds construction cost; prefers discounted auctions; borrows only when return beats cost; Comprehensive only on high-value developments; delays construction during inflation, accelerates under housing subsidies; renovates at >15% depreciation; sells ahead of declines; balanced portfolio.
+- [x] **R4.1 Aggressive Investor** — always buys if one future rent remains payable; always bids, up to 120% of estimated value; completes groups first; max houses immediately, hotels ASAP; borrows whenever it lifts projected rent; repays only when cash > 2× loan; Basic insurance on houses, Comprehensive on hotels; never sells voluntarily; covets Galle Face & Nuwara Eliya.
+- [x] **R4.2 Conservative Banker** — buys only if ≥50% cash remains; bids only below market value; loans only to stave off bankruptcy, repaid at every Bank visit; Comprehensive on every developed property; no hotels while indebted; prefers railways/utilities; no investments during recessions; renovates at >10% depreciation; largest cash reserve.
+- [x] **R4.3 Risk Taker** — buys everything possible; always borrows the max, refinances often; bids until cash is gone; hotels as early as possible; insures only after a loss; ignores depreciation until forced; sells cheap assets to fund premium ones; invests through downturns.
+- [x] **R4.4 Opportunistic Trader** — buys only when projected appreciation exceeds construction cost; prefers discounted auctions; borrows only when return beats cost; Comprehensive only on high-value developments; delays construction during inflation, accelerates under housing subsidies; renovates at >15% depreciation; sells ahead of declines; balanced portfolio.
 
 ## R5 — Output (§5)
 
-- [ ] **R5.1** Every §5 message reproduced with exact wording, punctuation and line breaks: pre-game header, roll-off, dice roll, movement, passing GO, purchase, rent, house construction, hotel upgrade, loan obtained/repaid/defaulted, insurance purchase, disaster + claim, full auction sequence, economic event, government regulation, depreciation, insurance-expiry warning, bankruptcy.
-- [ ] **R5.2** Blocks are emitted **compact** — no blank line between the lines of a block (decision **D26**). The vertical gaps in the PDF are LaTeX spacing between separate verbatim chunks, not content.
-- [ ] **R5.3** All amounts formatted with thousands separators: `LKR 12,300`. Every monetary print goes through `fmt_lkr`.
-- [ ] **R5.4** End of every round: the `Round N Summary` block (per player: Cash, Net Worth, Properties, Hotels, Outstanding Loan — `None` when zero) with 45-character `=`/`-` rule lines.
+- [x] **R5.1** Every §5 message reproduced with exact wording, punctuation and line breaks: pre-game header, roll-off, dice roll, movement, passing GO, purchase, rent, house construction, hotel upgrade, loan obtained/repaid/defaulted, insurance purchase, disaster + claim, full auction sequence, economic event, government regulation, depreciation, insurance-expiry warning, bankruptcy.
+- [x] **R5.2** Blocks are emitted **compact** — no blank line between the lines of a block (decision **D26**). The vertical gaps in the PDF are LaTeX spacing between separate verbatim chunks, not content.
+- [x] **R5.3** All amounts formatted with thousands separators: `LKR 12,300`. Every monetary print goes through `fmt_lkr`.
+- [x] **R5.4** End of every round: the `Round N Summary` block (per player: Cash, Net Worth, Properties, Hotels, Outstanding Loan — `None` when zero) with 45-character `=`/`-` rule lines.
 - [x] **R5.5** End of every round, immediately after the summary: the Rule-LK 36 `Current Market Conditions` block with 41-character rule lines (Market Boom, Market Decline, Regional Development, Inflation, Current Loan Interest — each with rounds remaining).
-- [ ] **R5.6** End of game: `GAME OVER` block with winner, total cash, total property value, outstanding loans, net worth.
-- [ ] **R5.7** `MONOPOLY-LK Simulation` is the **first line of output**. No banner, ASCII art or diagnostic may precede it.
+- [x] **R5.6** End of game: `GAME OVER` block with winner, total cash, total property value, outstanding loans, net worth.
+- [x] **R5.7** `MONOPOLY-LK Simulation` is the **first line of output**. No banner, ASCII art or diagnostic may precede it.
 
 ---
 
@@ -228,14 +228,14 @@ implemented exactly once, at a choke point, with a comment citing its ID.
 
 ## Definition of done
 
-- [ ] `gcc *.c -o monopoly` → zero errors, zero warnings; `gcc -std=c99 -Wall -Wextra -pedantic *.c -o monopoly` also clean.
-- [ ] `./monopoly` and `./monopoly <seed>` run to completion with no interaction.
-- [ ] A full 500-round game completes; a game with early bankruptcies ends correctly with the winner block.
-- [ ] `./monopoly 42` twice produces byte-identical output.
-- [ ] Console output audited line-by-line against every §5 template.
-- [ ] No `malloc`, `calloc`, `realloc`, `getline`, linked lists, globals, or `math.h` anywhere in the tree.
-- [ ] Every per-property price and base rent in a run traces to a row of `assets/Rent.csv`; no source file contains a transcribed copy.
-- [ ] Editing a price in `Rent.csv` changes the next run without recompiling.
-- [ ] Running from a directory where the CSV cannot be found exits 1 with a stderr diagnostic and **zero bytes on stdout**.
-- [ ] A short, duplicated, misnamed, mis-grouped, or non-numeric CSV row is reported with its line number rather than silently accepted.
-- [ ] All R-items above checked; every D-decision implemented exactly once and cited in a comment.
+- [x] `gcc *.c -o monopoly` → zero errors, zero warnings; `gcc -std=c99 -Wall -Wextra -pedantic *.c -o monopoly` also clean.
+- [x] `./monopoly` and `./monopoly <seed>` run to completion with no interaction.
+- [x] A full 500-round game completes; a game with early bankruptcies ends correctly with the winner block.
+- [x] `./monopoly 42` twice produces byte-identical output.
+- [x] Console output audited line-by-line against every §5 template.
+- [x] No `malloc`, `calloc`, `realloc`, `getline`, linked lists, globals, or `math.h` anywhere in the tree.
+- [x] Every per-property price and base rent in a run traces to a row of `assets/Rent.csv`; no source file contains a transcribed copy.
+- [x] Editing a price in `Rent.csv` changes the next run without recompiling.
+- [x] Running from a directory where the CSV cannot be found exits 1 with a stderr diagnostic and **zero bytes on stdout**.
+- [x] A short, duplicated, misnamed, mis-grouped, or non-numeric CSV row is reported with its line number rather than silently accepted.
+- [x] All R-items above checked; every D-decision implemented exactly once and cited in a comment.
