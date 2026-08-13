@@ -42,14 +42,11 @@ typedef struct {
     InsuranceType hotelTier; /* R4.*: cover bought on a hotel property      */
 } Profile;
 
-/* Milestone 6 step 1 replaces these rows one personality at a time. Until
-   then every row carries the milestone-5 placeholder's numbers, so this
-   commit changes the shape of the file and none of its behaviour. */
 static const Profile PROFILE[] = {
-    /* STRAT_AGGRESSIVE   */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC },
-    /* STRAT_CONSERVATIVE */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC },
-    /* STRAT_RISKTAKER    */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC },
-    /* STRAT_OPPORTUNIST  */ { 60, 75, 10, true, false, INS_BASIC, INS_BASIC }
+    /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
+    /* STRAT_CONSERVATIVE */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC },
+    /* STRAT_RISKTAKER    */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC },
+    /* STRAT_OPPORTUNIST  */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC }
 };
 
 static const Profile *profile(const GameState *g, int p)
@@ -101,16 +98,68 @@ static bool purchase_permitted(const GameState *g, int p, int sq)
     return !(cap > 0 && count_undeveloped(g, p) >= cap);
 }
 
+/* Would owning this square complete a colour group for p? R4.1 has the
+   Aggressive Investor complete groups first, and a group is the only thing
+   that unlocks Rule 8, so this is worth paying over the odds for. */
+static bool completes_group(const GameState *g, int p, int sq)
+{
+    PropertyGroup grp = g->board[sq].group;
+    int           i;
+
+    if (grp == GRP_NONE) {
+        return false;
+    }
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].group == grp && i != sq && g->board[i].owner != p) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* R4.1: is there anyone left who could still land on this and pay for it?
+ *
+ * The bullet reads "always buys if one future rent remains payable", which is
+ * a solvency question rather than a property question -- a square nobody can
+ * visit earns nothing however good it looks.
+ */
+static bool rent_still_payable(const GameState *g, int p)
+{
+    int i;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        if (i != p && !g->players[i].bankrupt) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* ------------------------------------------------------------- purchase -- */
 
 /* Rule 5's choice: take it at the asking price, or decline and send it to
  * auction. The rules have already had their say by the time this is called;
  * what is left is whether this personality wants it at that price.
  */
+/* R4.1. Buys whatever it can afford for as long as anyone is left to charge
+ * rent to, and spends down to nothing to do it.
+ *
+ * completes_group and the two coveted squares do not appear as a separate
+ * branch because they cannot change the answer: this arm already says yes to
+ * everything affordable. They earn their keep in the auction, where there is
+ * a ceiling to raise.
+ */
+static bool buy_aggressive(GameState *g, int p, int sq)
+{
+    return rent_still_payable(g, p) && g->players[p].cash >= square_value(g, sq);
+}
+
 static bool wants_to_buy(GameState *g, int p, int sq)
 {
     switch (g->players[p].strat) {
     case STRAT_AGGRESSIVE:
+        return buy_aggressive(g, p, sq);
+
     case STRAT_CONSERVATIVE:
     case STRAT_RISKTAKER:
     case STRAT_OPPORTUNIST:
@@ -141,9 +190,48 @@ bool decide_buy(GameState *g, int p, int sq)
  * follow, which is D9's reading of section 3: the ceiling is the personality,
  * the increment is the rule.
  */
+/* The two squares R4.1 names outright. Board indices rather than names
+   because Rent.csv can rename a property but Table 1 fixes where it sits. */
+#define SQ_IDX_NUWARA_ELIYA 37
+#define SQ_IDX_GALLE_FACE   39
+
+static bool covets(int sq)
+{
+    return sq == SQ_IDX_GALLE_FACE || sq == SQ_IDX_NUWARA_ELIYA;
+}
+
+/* How far this personality will follow an auction, as a percentage of market
+ * value. PROFILE holds the ceiling; the switch is for personalities whose
+ * appetite depends on which square is under the hammer.
+ */
+static int bid_ceiling(GameState *g, int p, int sq)
+{
+    int pct = profile(g, p)->bidCapPct;
+
+    switch (g->players[p].strat) {
+    case STRAT_AGGRESSIVE:
+        /* R4.1: D9's 120% is the ceiling it will ever reach, and it reaches
+           it for the squares the bullet names -- one that completes a group,
+           or Galle Face and Nuwara Eliya. Anything else it takes at market
+           and no higher, which is what makes "completes groups first" and
+           "covets" observable rather than decorative. */
+        if (!completes_group(g, p, sq) && !covets(sq)) {
+            pct = 100;
+        }
+        break;
+
+    case STRAT_CONSERVATIVE:
+    case STRAT_RISKTAKER:
+    case STRAT_OPPORTUNIST:
+        break;
+    }
+
+    return pct_of(square_value(g, sq), pct);
+}
+
 int decide_bid(GameState *g, int p, int sq, int minBid)
 {
-    int ceiling = pct_of(square_value(g, sq), profile(g, p)->bidCapPct);
+    int ceiling = bid_ceiling(g, p, sq);
 
     if (minBid > g->players[p].cash || minBid > ceiling) {
         return 0;
@@ -356,6 +444,59 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
  * half. That is what makes the ordering below a real strategic difference
  * rather than a cosmetic one.
  */
+/* Does p hold a monopoly it has not finished building out? R4.1 borrows
+   "whenever the funds raise projected rent", and under Rule 8 that is the
+   only condition in which borrowed money can raise rent at all. */
+static bool has_buildable_monopoly(const GameState *g, int p)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+
+        if (s->type != SQ_PROPERTY || s->owner != p) {
+            continue;
+        }
+        if (group_developable(g, p, s->group) && development_level(g, i) <= MAX_HOUSES) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* R4.1. Borrows to build and is in no hurry to repay.
+ *
+ * The repayment test is written cash/2 > principal rather than
+ * cash > 2*principal because a saturated principal would overflow the
+ * multiplication -- D29 makes balances that large reachable.
+ */
+static BankAction bank_aggressive(GameState *g, int p, int *amount)
+{
+    const Player *pl = &g->players[p];
+
+    if (pl->loan.active) {
+        if (pl->cash / 2 > pl->loan.principal) {
+            *amount = pl->loan.principal;
+            return BANK_REPAY_FULL;              /* R4.1: only when 2x      */
+        }
+        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+            return BANK_EXTEND;
+        }
+        return BANK_NONE;
+    }
+
+    if (has_buildable_monopoly(g, p)) {
+        int cap = max_loan(g, p);
+
+        if (cap > 0) {
+            *amount = cap;                       /* R4.1: funds the build   */
+            return BANK_OBTAIN;
+        }
+    }
+
+    return BANK_NONE;
+}
+
 static BankAction bank_baseline(GameState *g, int p, int *amount)
 {
     const Player *pl = &g->players[p];
@@ -401,6 +542,8 @@ BankAction decide_bank(GameState *g, int p, int *amount)
 
     switch (g->players[p].strat) {
     case STRAT_AGGRESSIVE:
+        return bank_aggressive(g, p, amount);
+
     case STRAT_CONSERVATIVE:
     case STRAT_RISKTAKER:
     case STRAT_OPPORTUNIST:
