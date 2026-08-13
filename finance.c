@@ -678,6 +678,102 @@ void check_loan_default(GameState *g)
     }
 }
 
+/* ----------------------------------------------------------- insurance -- */
+/*
+ * Section 1.2 and LK 8-11. Three tiers, priced off the property's current
+ * value, valid twenty rounds, and consumed by the first claim they pay.
+ */
+
+/* Appendix E's three premium rates, indexed by InsuranceType so INS_NONE
+   costs nothing and no branch is needed to say so. */
+static const int PREMIUM_PCT[] = {
+    0, INS_BASIC_PCT, INS_COMPREHENSIVE_PCT, INS_BUSINESS_PCT
+};
+
+/* Section 1.2's tier names, for the purchase block. */
+static const char *TIER_NAMES[] = {
+    "None", "Basic", "Comprehensive", "Business Interruption"
+};
+
+const char *insurance_name(InsuranceType tier)
+{
+    return TIER_NAMES[tier];
+}
+
+/* Appendix E: 5%, 10% or 15% of the property's CURRENT value, then LK 24's
+ * Insurance Regulation and Heavy Monsoon through EFF_PREMIUM_MUL.
+ *
+ * Reading square_value is the whole design. A premium quoted off the stored
+ * price would drift away from the market the first time a boom or an
+ * inflation draw landed; quoted off the choke point it tracks both, and
+ * milestone 4's systems reach it without knowing it exists.
+ */
+int premium(const GameState *g, int sq, InsuranceType tier)
+{
+    int base = pct_of(square_value(g, sq), PREMIUM_PCT[tier]);
+
+    return apply_pct(base, effect_modifier(g, EFF_PREMIUM_MUL, sq, g->board[sq].owner));
+}
+
+/* LK 8-9. One policy per property; buying again replaces what was there and
+ * restarts the twenty rounds, which is what "renewal" means for a square that
+ * already carries a policy.
+ *
+ * Cash is tested before charging, on the same principle as construction and
+ * upkeep: a premium is voluntary, and selling buildings to insure a building
+ * is not a trade the D11 ladder should ever be asked to make.
+ */
+void buy_policy(GameState *g, int p, int sq, InsuranceType tier)
+{
+    char    b[FMT_BUF];
+    Square *s   = &g->board[sq];
+    int     due = premium(g, sq, tier);
+
+    if (tier == INS_NONE || s->owner != p) {
+        return;
+    }
+    if (g->players[p].cash < due || !charge(g, p, due, -1)) {
+        return;
+    }
+
+    s->policy       = tier;
+    s->policyRounds = INS_ROUNDS;
+
+    printf("%s Insurance purchased.\n", TIER_NAMES[tier]);
+    printf("Property : %s\n", s->name);
+    printf("Premium : LKR %s.\n", fmt_lkr(b, due));
+}
+
+/* LK 9, once per round. Warns three rounds out and lapses at zero.
+ *
+ * The warning fires on the exact equality rather than on "three or fewer", so
+ * each policy announces itself once. A >= test would repeat the same warning
+ * for four consecutive rounds, which reads as four different policies about
+ * to lapse rather than one.
+ */
+void tick_insurance(GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        Square *s = &g->board[i];
+
+        if (s->policy == INS_NONE) {
+            continue;
+        }
+
+        s->policyRounds--;
+        if (s->policyRounds == INS_WARN_ROUNDS) {
+            printf("Insurance policy on %s expires in %d rounds.\n",
+                   s->name, INS_WARN_ROUNDS);
+        }
+        if (s->policyRounds <= 0) {
+            s->policy       = INS_NONE;
+            s->policyRounds = 0;
+        }
+    }
+}
+
 /* ------------------------------------------- debt recovery, bankruptcy -- */
 /*
  * Rule 11 charges taxes "immediately" and Rule 14 declares bankruptcy when

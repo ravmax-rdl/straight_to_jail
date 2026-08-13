@@ -492,9 +492,17 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         draw_event_card(g, p);
         break;
 
-    /* Still to come, in milestone 5. */
-    case SQ_INSURANCE:
+    /* R1.9 and S1.2: one policy, one property, per landing -- the same
+       one-action-per-square shape the Bank has. */
+    case SQ_INSURANCE: {
+        InsuranceType tier;
+        int           target = decide_insurance(g, p, &tier);
+
+        if (target >= 0) {
+            buy_policy(g, p, target, tier);
+        }
         break;
+    }
     }
 }
 
@@ -774,6 +782,7 @@ void play_round(GameState *g)
     accrue_interest(g);             /* LK 4, D4                            */
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
+    tick_insurance(g);              /* LK 9: policies lapse and warn       */
 
     /* The registry ages BEFORE this round's cadences fire, so that nothing
        created below is docked a round the moment it is created. D13 writes

@@ -172,6 +172,11 @@ typedef enum {
 #define BASE_INTEREST_PCT    8   /* Table 9 Stable Economy, D21              */
 #define INS_ROUNDS          20   /* LK 9                                     */
 #define INS_WARN_ROUNDS      3   /* LK 9                                     */
+#define INS_BASIC_PCT        5   /* App E: premium, of current value         */
+#define INS_COMPREHENSIVE_PCT 10 /* App E                                    */
+#define INS_BUSINESS_PCT    15   /* App E                                    */
+#define BI_RENT_ROUNDS       5   /* D3: Business Interruption's lost rent    */
+#define REPAIR_PCT          50   /* D1: of the buildings' construction cost  */
 #define MAX_HOUSES           4   /* Rule 9                                   */
 #define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
 #define COMMUNITY_PCT       10   /* D16: of total property assets            */
@@ -337,6 +342,15 @@ int         net_worth(const GameState *g, int p);
 void credit(GameState *g, int p, int amt);
 bool charge(GameState *g, int p, int amt, int toPlayer);
 
+/* finance.c -- insurance (S1.2, LK 8-9, App E). premium reads square_value,
+   so a quote tracks inflation and the market without a line of its own.
+   tick_insurance runs once per round, warns at exactly INS_WARN_ROUNDS and
+   lapses the policy at zero. */
+int  premium(const GameState *g, int sq, InsuranceType tier);
+void buy_policy(GameState *g, int p, int sq, InsuranceType tier);
+void tick_insurance(GameState *g);
+const char *insurance_name(InsuranceType tier);
+
 /* finance.c -- Rule 11's debt recovery and Rule 14's bankruptcy (D11).
    raise_funds is called by charge and by nothing else; creditor is -1 when
    the Bank is owed. */
@@ -450,6 +464,7 @@ bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
 int  decide_build(GameState *g, int p);
 int  decide_maintenance(GameState *g, int p);
+int  decide_insurance(GameState *g, int p, InsuranceType *tier);
 
 /* decide_bank returns the one LK 5 action to take on this landing (R1.8),
    writing the sum involved to *amount for the three that need one. */

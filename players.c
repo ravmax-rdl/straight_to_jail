@@ -185,6 +185,44 @@ int decide_maintenance(GameState *g, int p)
     return -1;
 }
 
+/* PLACEHOLDER (milestone 6). R1.9 and S1.2: landing on an insurance square
+ * buys or renews ONE policy on ONE property, so this returns a single square
+ * or -1 and writes the tier it wants to *tier.
+ *
+ * Only developed property is worth insuring, and that is not a strategy
+ * preference but what the rules make true: LK 10's disasters strike developed
+ * properties, D1 prices the repair off the buildings, and a vacant lot has
+ * neither. Insuring one would be paying a premium against a peril that cannot
+ * reach it.
+ *
+ * Basic everywhere, which milestone 6 replaces -- section 3 wants Basic on
+ * houses and Comprehensive on hotels for the Aggressive Investor, and nothing
+ * at all for the Risk Taker until it has already lost something.
+ */
+int decide_insurance(GameState *g, int p, InsuranceType *tier)
+{
+    int i;
+
+    *tier = INS_BASIC;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+
+        if (s->owner != p || s->policy != INS_NONE) {
+            continue;
+        }
+        if (development_level(g, i) == 0) {
+            continue;
+        }
+        if (g->players[p].cash < premium(g, i, INS_BASIC)) {
+            continue;
+        }
+        return i;
+    }
+
+    return -1;
+}
+
 /* How close to maturity a loan must be before the placeholder buys time
    rather than hoping for another Bank landing. */
 #define EXTEND_WITHIN_ROUNDS 5
