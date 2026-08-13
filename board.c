@@ -603,9 +603,77 @@ int development_level(const GameState *g, int sq)
  */
 int square_value(const GameState *g, int sq)
 {
+    const Square *s     = &g->board[sq];
+
+    /* LK 16, applied before the market. Depreciation is a property of the
+       building itself -- what age has done to it -- so a boom lifts the
+       depreciated property rather than the property it used to be. */
+    int           value = apply_pct(s->price, -s->depreciationPct);
+
+    /* LK 28's first consequence, and for the same reason it sits here rather
+       than after the market: neglect is damage to the asset, not a change in
+       what the market will pay for a sound one. */
+    if (s->structDamaged) {
+        value = apply_pct(value, STRUCT_VALUE_PCT);
+    }
+
+    return apply_pct(value, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
+}
+
+/* LK 29: what it costs to undo structural damage -- a quarter of what the
+ * buildings on the square would cost to replace.
+ *
+ * A different base from LK 17's ordinary renovation, which is a tenth of the
+ * property's market VALUE. That is the distinction the two rules draw:
+ * ordinary renovation buys back the wear on an asset, while this one rebuilds
+ * the fabric, so it is priced off construction rather than off the market.
+ */
+int structural_renovation_cost(const GameState *g, int sq)
+{
     const Square *s = &g->board[sq];
 
-    return apply_pct(s->price, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
+    if (s->hotel) {
+        return pct_of(building_cost(g, sq, true), STRUCT_RENOVATE_PCT);
+    }
+    return pct_of(building_cost(g, sq, false) * s->houses, STRUCT_RENOVATE_PCT);
+}
+
+/* LK 16, on the five-round cadence. One percentage point per tick once a
+ * property has been held longer than DEPREC_START_AGE, capped at
+ * DEPREC_CAP_PCT.
+ *
+ * D19's single clock is what makes this correct without a second counter:
+ * age is round - purchasedRound, so it starts at purchase rather than at the
+ * start of the game and resets when LK 17's renovation resets the field.
+ * Unowned property carries purchasedRound == -1 and never ages -- a vacant
+ * lot has nothing to wear out, and without this test every unsold square
+ * would arrive at the cap by round 80.
+ */
+void depreciation_tick(GameState *g)
+{
+    char b[FMT_BUF];
+    int  i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        Square *s = &g->board[i];
+
+        if (s->type != SQ_PROPERTY || s->owner < 0 || s->purchasedRound < 0) {
+            continue;
+        }
+        if (g->round - s->purchasedRound <= DEPREC_START_AGE) {
+            continue;
+        }
+        if (s->depreciationPct >= DEPREC_CAP_PCT) {
+            continue;
+        }
+
+        s->depreciationPct++;
+        printf("Property\n");
+        printf("%s\n", s->name);
+        printf("has depreciated by %d%%.\n", s->depreciationPct);
+        printf("Current Value\n");
+        printf("LKR %s.\n", fmt_lkr(b, square_value(g, i)));
+    }
 }
 
 /* D18 again, and the reason this is not square_value: mortgage value comes
@@ -649,11 +717,44 @@ int building_cost(const GameState *g, int sq, bool hotel)
 int maintenance_cost(const GameState *g, int sq)
 {
     const Square *s = &g->board[sq];
+    int           cost;
 
     if (s->hotel) {
-        return pct_of(building_cost(g, sq, true), MAINT_HOTEL_PCT);
+        cost = pct_of(building_cost(g, sq, true), MAINT_HOTEL_PCT);
+    } else {
+        cost = pct_of(building_cost(g, sq, false) * s->houses, MAINT_HOUSE_PCT);
     }
-    return pct_of(building_cost(g, sq, false) * s->houses, MAINT_HOUSE_PCT);
+
+    /* LK 28's third consequence: neglect makes future upkeep dearer, which
+       is the trap the rule is describing -- the longer a building is left,
+       the more it costs to start looking after it again. */
+    if (s->structDamaged) {
+        cost = apply_pct(cost, STRUCT_MAINT_PCT);
+    }
+
+    return cost;
+}
+
+/* D1: what it costs to put right the buildings standing on a square -- half
+ * of what they currently cost to put up.
+ *
+ * The spec never quantifies a repair, so D1 anchors it to construction. That
+ * makes damage scale with development, which is the behaviour LK 10 clearly
+ * intends (a hotel is a bigger loss than one house), and makes it track
+ * inflation for free through building_cost.
+ *
+ * Note this is the whole square, unlike the D11 ladder's demolition refund,
+ * which prices only the topmost building. A fire does not burn down one
+ * house of four.
+ */
+int repair_cost(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    if (s->hotel) {
+        return pct_of(building_cost(g, sq, true), REPAIR_PCT);
+    }
+    return pct_of(building_cost(g, sq, false) * s->houses, REPAIR_PCT);
 }
 
 /* Table 3 as a band lookup rather than a formula. The spec gives five bands
@@ -696,6 +797,14 @@ void condition_tick(GameState *g)
             s->conditionPct = 0;
         }
         s->unmaintainedRounds++;
+
+        /* LK 28. Announced once, on the round the limit is passed -- the
+           counter goes on climbing afterwards, so testing it without the
+           flag would reprint this every round for the rest of the game. */
+        if (s->unmaintainedRounds > UNMAINTAINED_LIMIT && !s->structDamaged) {
+            s->structDamaged = true;
+            printf("Structural damage has occurred at %s.\n", s->name);
+        }
     }
 }
 
@@ -729,6 +838,14 @@ int square_rent(const GameState *g, int sq, int diceTotal)
         return 0;
     }
 
+    /* LK 11: a damaged building collects nothing until it is repaired. Only
+       buildings can be damaged, so an undeveloped square is unaffected --
+       and auto_repairs runs every round, so this is a pause on the income
+       rather than the end of it. */
+    if (s->damaged) {
+        return 0;
+    }
+
     switch (s->type) {
     case SQ_PROPERTY:
         if (s->hotel) {
@@ -745,6 +862,12 @@ int square_rent(const GameState *g, int sq, int diceTotal)
            were maintained. */
         if (development_level(g, sq) > 0) {
             rent = pct_of(rent, condition_rent_pct(s->conditionPct));
+        }
+        /* LK 28's second consequence, a cap on what the building can earn,
+           applied after the condition band because both describe the same
+           building and LK 28's is the harder ceiling of the two. */
+        if (s->structDamaged) {
+            rent = pct_of(rent, STRUCT_RENT_PCT);
         }
         return apply_pct(rent, effect_modifier(g, EFF_RENT_MUL, sq, s->owner));
 

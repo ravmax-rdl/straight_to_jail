@@ -382,6 +382,56 @@ void final_report(const GameState *g)
  * Rule 5 gives no third option. Declining is not "nothing happens" -- it is
  * an auction, immediately, which is why the else branch is not empty.
  */
+/* LK 17. Pays a tenth of current market value to undo the wear and restart
+ * the clock.
+ *
+ * Resetting purchasedRound is what "resets age" means under D19's single
+ * clock: age is derived from that field, so there is no separate age counter
+ * to forget. Clearing depreciationPct alone would leave the property
+ * immediately eligible to depreciate again on the next five-round tick.
+ */
+static void renovate_step(GameState *g, int p, int sq)
+{
+    char    b[FMT_BUF];
+    Square *s = &g->board[sq];
+    int     cost;
+
+    if (!decide_renovate(g, p, sq)) {
+        return;
+    }
+
+    /* LK 29's rebuild and LK 17's renovation are different jobs at different
+       prices, and decide_renovate already ranked them: structural damage is
+       the worse of the two, so a square carrying it gets rebuilt first. */
+    if (s->structDamaged) {
+        cost = structural_renovation_cost(g, sq);
+        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+            return;
+        }
+
+        /* LK 29 restores value, rent and condition together, which is three
+           fields because the three penalties are read in three places. */
+        s->structDamaged      = false;
+        s->conditionPct       = 100;
+        s->unmaintainedRounds = 0;
+
+        printf("%s rebuilt %s.\n", g->players[p].name, s->name);
+        printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
+        return;
+    }
+
+    cost = pct_of(square_value(g, sq), RENOVATE_PCT);
+    if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+        return;
+    }
+
+    s->depreciationPct = 0;
+    s->purchasedRound  = g->round;      /* D19: the age resets with it     */
+
+    printf("%s renovated %s.\n", g->players[p].name, s->name);
+    printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
+}
+
 static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
 {
     char    b[FMT_BUF];
@@ -406,7 +456,12 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     }
 
     if (s->owner == p) {
-        return;                              /* your own square is free   */
+        /* LK 17 permits renovation here and nowhere else -- landing on your
+           own property is the opportunity, which is why this is the one
+           branch of land_on that does something for a square the player
+           already holds. */
+        renovate_step(g, p, sq);
+        return;
     }
 
     rent = square_rent(g, sq, diceTotal);
@@ -492,9 +547,17 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         draw_event_card(g, p);
         break;
 
-    /* Still to come, in milestone 5. */
-    case SQ_INSURANCE:
+    /* R1.9 and S1.2: one policy, one property, per landing -- the same
+       one-action-per-square shape the Bank has. */
+    case SQ_INSURANCE: {
+        InsuranceType tier;
+        int           target = decide_insurance(g, p, &tier);
+
+        if (target >= 0) {
+            buy_policy(g, p, target, tier);
+        }
         break;
+    }
     }
 }
 
@@ -774,6 +837,8 @@ void play_round(GameState *g)
     accrue_interest(g);             /* LK 4, D4                            */
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
+    tick_insurance(g);              /* LK 9: policies lapse and warn       */
+    auto_repairs(g);                /* LK 11: damage is a pause, not an end */
 
     /* The registry ages BEFORE this round's cadences fire, so that nothing
        created below is docked a round the moment it is created. D13 writes
@@ -785,11 +850,15 @@ void play_round(GameState *g)
     /* The cadenced systems, in D13's order. Each fires on its own clock and
        none of them knows about the others -- the registry is what lets them
        compose without a line of coordination here. */
+    if (g->round % DEPREC_EVERY == 0) {
+        depreciation_tick(g);       /* LK 16                               */
+    }
     if (g->round % INFLATION_EVERY == 0) {
         draw_inflation(g);          /* LK 12-14                            */
     }
     if (g->round % MARKET_EVERY == 0) {
         market_review(g);           /* LK 30-33                            */
+        fire_disaster(g);           /* LK 10, App E                        */
     }
     if (g->round % EVENT_EVERY == 0) {
         national_event(g);          /* LK 18: the whole board              */

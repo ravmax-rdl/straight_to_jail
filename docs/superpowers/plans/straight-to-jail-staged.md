@@ -972,9 +972,9 @@ order and confirm no card repeats before all 20 have appeared.
 
 ### 5.1 Policies
 
-- [ ] **Step 1:** `premium(g, sq, tier)` — 5% / 10% / 15% of `square_value` (App E), then `EFF_PREMIUM_MUL`. Because it
+- [x] **Step 1:** `premium(g, sq, tier)` — 5% / 10% / 15% of `square_value` (App E), then `EFF_PREMIUM_MUL`. Because it
       reads `square_value`, premiums track inflation and market swings automatically.
-- [ ] **Step 2:** `buy_policy(g, p, sq, tier)` — charge the premium, set `policy` and `policyRounds = INS_ROUNDS`. One
+- [x] **Step 2:** `buy_policy(g, p, sq, tier)` — charge the premium, set `policy` and `policyRounds = INS_ROUNDS`. One
       policy per property; buying again replaces and resets.
 
 ```
@@ -983,22 +983,22 @@ Property : Galle Fort
 Premium : LKR 650.
 ```
 
-- [ ] **Step 3:** `tick_insurance(g)` — decrement `policyRounds` on every insured square each round. At exactly
+- [x] **Step 3:** `tick_insurance(g)` — decrement `policyRounds` on every insured square each round. At exactly
       `INS_WARN_ROUNDS` print the §5 warning; at 0 clear the policy.
 
 ```
 Insurance policy on Galle Fort expires in 3 rounds.
 ```
 
-- [ ] **Step 4:** Placeholder `decide_insurance` — insure any developed, uninsured property the player can afford,
+- [x] **Step 4:** Placeholder `decide_insurance` — insure any developed, uninsured property the player can afford,
       choosing Basic. Wire `SQ_INSURANCE` in `land_on` to it.
 
 ### 5.2 Disasters, claims, repairs
 
-- [ ] **Step 5:** `repair_cost(g, sq)` (**D1**) — 50% of the current construction cost of the buildings on the square:
+- [x] **Step 5:** `repair_cost(g, sq)` (**D1**) — 50% of the current construction cost of the buildings on the square:
       `houses × building_cost(house)`, or `building_cost(hotel)` for a hotel, halved. Reading `building_cost` makes it
       track inflation.
-- [ ] **Step 6:** `covers(tier, disaster)` (**D3**) — a plain matrix, with the spec's gap documented in a comment:
+- [x] **Step 6:** `covers(tier, disaster)` (**D3**) — a plain matrix, with the spec's gap documented in a comment:
 
 ```c
 /* D3. Building Collapse and Electrical Failure are covered by NO tier below
@@ -1010,11 +1010,11 @@ Basic → {Fire, Flood} at 80%. Comprehensive → {Fire, Flood, Riot} at 100% (V
 Business Interruption → all perils at 100%, plus five rounds of hotel rent as an immediate lump sum, hotel properties
 only.
 
-- [ ] **Step 7:** `fire_disaster(g)` — every 10 rounds pick a random **developed** property and a random `Disaster`,
+- [x] **Step 7:** `fire_disaster(g)` — every 10 rounds pick a random **developed** property and a random `Disaster`,
       weighting Flood and Riot by `EFF_FLOOD_RISK` / `EFF_RIOT_RISK`. Set `damaged = true`. If the policy covers the
       peril, credit the compensation and print the claim block; otherwise the owner pays the repair cost. Either way set
       `sufferedLoss = true` on the owner — the Risk Taker's insurance trigger depends on it.
-- [ ] **Step 8:** **A payout consumes the policy** (**D20**) — set `policy = INS_NONE`, `policyRounds = 0`, regardless of
+- [x] **Step 8:** **A payout consumes the policy** (**D20**) — set `policy = INS_NONE`, `policyRounds = 0`, regardless of
       rounds remaining. Not doing this is the single easiest way to fail the clarification.
 
 ```
@@ -1026,14 +1026,14 @@ Compensation Paid :
 LKR 2,500.
 ```
 
-- [ ] **Step 9:** Gate rent on `damaged` inside `square_rent` — a damaged building collects nothing until repaired
+- [x] **Step 9:** Gate rent on `damaged` inside `square_rent` — a damaged building collects nothing until repaired
       (LK 11).
-- [ ] **Step 10:** `auto_repairs(g)` — each round, any owner who can afford the repair cost on a damaged square pays it
+- [x] **Step 10:** `auto_repairs(g)` — each round, any owner who can afford the repair cost on a damaged square pays it
       and clears `damaged` (LK 11).
 
 ### 5.3 Depreciation and renovation
 
-- [ ] **Step 11:** `depreciation_tick(g)` — every 5 rounds, any property whose age (`round - purchasedRound`, **D19**)
+- [x] **Step 11:** `depreciation_tick(g)` — every 5 rounds, any property whose age (`round - purchasedRound`, **D19**)
       exceeds `DEPREC_START_AGE` gains one percentage point of `depreciationPct`, capped at `DEPREC_CAP_PCT`. Unowned
       property never ages, so `purchasedRound == -1` is skipped.
 
@@ -1045,23 +1045,36 @@ Current Value
 LKR 4,750.
 ```
 
-- [ ] **Step 12:** Apply `depreciationPct` inside `square_value` — which is why `Current Value` above is simply
+- [x] **Step 12:** Apply `depreciationPct` inside `square_value` — which is why `Current Value` above is simply
       `square_value(g, sq)`.
-- [ ] **Step 13:** Placeholder `decide_renovate` — renovate when `depreciationPct > 10` and affordable. Cost is
+- [x] **Step 13:** Placeholder `decide_renovate` — renovate when `depreciationPct > 10` and affordable. Cost is
       `RENOVATE_PCT` of current market value; clears `depreciationPct` and resets age by setting
       `purchasedRound = g->round` (LK 17). Wire it into `land_on` for the case where the landing player already owns the
       square — LK 17 permits renovation only there.
 
 ### 5.4 Structural damage
 
-- [ ] **Step 14:** In `condition_tick`, when `unmaintainedRounds > UNMAINTAINED_LIMIT` on a square with buildings, set
+- [x] **Step 14:** In `condition_tick`, when `unmaintainedRounds > UNMAINTAINED_LIMIT` on a square with buildings, set
       `structDamaged = true` **once**.
-- [ ] **Step 15:** Apply LK 28's three consequences at their choke points: value −15% inside `square_value`; maximum
+- [x] **Step 15:** Apply LK 28's three consequences at their choke points: value −15% inside `square_value`; maximum
       rent −25% inside `square_rent`; maintenance +50% inside the maintenance cost calculation.
-- [ ] **Step 16:** Extend `decide_renovate` for LK 29 — renovating a structurally damaged building costs 25% of
+- [x] **Step 16:** Extend `decide_renovate` for LK 29 — renovating a structurally damaged building costs 25% of
       replacement value and clears `structDamaged`, restoring value, rent and condition together.
-- [ ] **Step 17:** Print `Structural damage has occurred at %s.` — §5 gives no template, so match the depreciation
+- [x] **Step 17:** Print `Structural damage has occurred at %s.` — §5 gives no template, so match the depreciation
       block's voice.
+
+> **LK 28 is unreachable with the milestone-5 placeholder, and that is the placeholder being correct rather than the
+> rule being unimplemented.** `decide_maintenance` services every building at Table 3's 75% edge, which resets
+> `unmaintainedRounds` roughly every thirteen rounds, and an owner too poor to maintain usually loses the buildings to
+> the D11 ladder before the counter can reach twenty. Verified by lowering the maintenance threshold to 10%: seed 42
+> then produces 15 structural damages and 7 rebuilds, and probes confirm all three LK 28 penalties exact (677 value
+> readings, 17 rent, 7 upkeep). Milestone 6's Risk Taker — *ignores depreciation until forced* — is what should
+> exercise this in an ordinary run.
+>
+> **LK 29's rebuild is priced off construction while LK 17's renovation is priced off market value.** That is the
+> distinction the two rules draw rather than an inconsistency: ordinary renovation buys back wear on an asset, a
+> rebuild replaces the fabric. `decide_renovate` ranks the rebuild first, since structural damage costs value, rent and
+> upkeep at once where depreciation costs only value.
 
 **Verify:**
 ```
@@ -1075,6 +1088,20 @@ A premium must equal exactly 5/10/15% of the property's current value. No proper
 renovation, `square_value` must return to its undepreciated level. A structurally damaged property's value must be
 exactly 15% below its otherwise-computed value. **After a claim is paid, that property must show no policy** — confirm
 by grepping for a second claim on the same property with no intervening purchase.
+
+> **Results, seed 42 (309 rounds):** 8 policies purchased, 6 expiry warnings, 19 disasters — 2 paying a claim and 17
+> not. First depreciation announced at the end of round 55, which is the earliest a round-0 purchase can reach (age
+> must exceed 50 and the tick is every 5). Depreciation caps at exactly 30% on the seeds that get there.
+>
+> A premium is 5% of `square_value` *and then* `EFF_PREMIUM_MUL`: of 63 quotes across eight seeds, 45 are exactly 5%
+> and the other 18 are that figure moved by exactly one of the three effects that touch premiums — nine at −15%
+> (Insurance Regulation), five at −20% (Insurance Discount card), four at +20% (Heavy Monsoon). None unexplained.
+>
+> **D20 checked across 60 seeds: 59 claims paid, none on a property whose policy had already been spent.**
+>
+> Depreciation inside `square_value` verified by probe: 1,618 readings, every one exactly price less depreciation then
+> `EFF_VALUE_MUL`. Note that a property changing hands also resets the clock — seven properties on seed 42 restart at
+> 1% mid-game, and each traces to a foreclosure auction. That is R3.11's *unowned property never ages*, not a lapse.
 
 **Commit:** `feat: insurance, disasters, depreciation, structural damage`
 

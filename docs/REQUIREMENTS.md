@@ -88,7 +88,7 @@ such override is a numbered decision so it can be defended at the viva.
 - [ ] **R1.6** 4 railways: price **1,500**, mortgage value **750**; rent 250/500/1,000/2,000 by count owned by one player (Table 2/7); mortgageable; never developable or insurable.
 - [ ] **R1.7** 2 utilities: price **1,500**, mortgage value **750**; rent = 4× dice (one owned) or 10× dice (both) (Table 8); mortgageable; never developable.
 - [x] **R1.8** Bank of Ceylon square: exactly **one** loan action per landing — obtain / repay part / repay full / extend / increase (§1.1.4, Rule-LK 5). **A loan can be repaid only by landing here**; there is no other route (clarification, decision **D19**).
-- [ ] **R1.9** 2 insurance squares; landing allows purchase or renewal of one policy tier for one property (§1.2).
+- [x] **R1.9** 2 insurance squares; landing allows purchase or renewal of one policy tier for one property (§1.2).
 
 ## R2 — Traditional rules (Rules 1–15)
 
@@ -120,17 +120,17 @@ such override is a numbered decision so it can be defended at the viva.
 - [x] **R3.5** Default → foreclosure: pledged assets to Bank, buildings demolished, their policies cancelled, debt cleared; player continues, or is bankrupt if nothing remains (LK 6–7). Foreclosed assets go to auction (LK 19).
 
 **Insurance & disasters (Rule-LK 8–11, §1.2, App E)**
-- [ ] **R3.6** Three tiers, premiums 5% / 10% / 15% of current property value; coverage per decision **D3**. One policy per property; valid 20 rounds; reminder 3 rounds before expiry (LK 8–9).
-- [ ] **R3.7** A policy covers **exactly one claim**. Paying out consumes it, whatever rounds remain (clarification, decision **D20**).
-- [ ] **R3.8** Every 10 rounds a random disaster (Fire, Flood, Riot, Building Collapse, Electrical Failure) may strike one random **developed** property; insured → compensation credited immediately, else the owner pays the repair cost (LK 10, repair cost per **D1**).
-- [ ] **R3.9** Damaged buildings collect no rent until repaired; repairs happen automatically once the owner can afford them (LK 11).
+- [x] **R3.6** Three tiers, premiums 5% / 10% / 15% of current property value; coverage per decision **D3**. One policy per property; valid 20 rounds; reminder 3 rounds before expiry (LK 8–9).
+- [x] **R3.7** A policy covers **exactly one claim**. Paying out consumes it, whatever rounds remain (clarification, decision **D20**).
+- [x] **R3.8** Every 10 rounds a random disaster (Fire, Flood, Riot, Building Collapse, Electrical Failure) may strike one random **developed** property; insured → compensation credited immediately, else the owner pays the repair cost (LK 10, repair cost per **D1**).
+- [x] **R3.9** Damaged buildings collect no rent until repaired; repairs happen automatically once the owner can afford them (LK 11).
 
 **Inflation (Rule-LK 12–14)**
 - [x] **R3.10** Every 10 rounds draw inflation from {−3, 0, 2, 5, 8, 12}%; apply `New = Old × (1 + rate)` permanently to individual property prices, individual base rents, building/hotel costs, and mortgage values. Premiums and repair costs inflate automatically because they derive from those. The current loan interest rate moves by the same factor, for **new** loans only (**D21**).
 
 **Depreciation & renovation (Rule-LK 15–17)**
-- [ ] **R3.11** Property age counts rounds **since purchase**, not since game start; unowned property never ages (clarification, decision **D19**). Properties older than 50 rounds without renovation lose 1% per 5 rounds, capped at 30%.
-- [ ] **R3.12** Landing on one's own property allows renovation: cost 10% of current market value; restores depreciation, resets age.
+- [x] **R3.11** Property age counts rounds **since purchase**, not since game start; unowned property never ages (clarification, decision **D19**). Properties older than 50 rounds without renovation lose 1% per 5 rounds, capped at 30%.
+- [x] **R3.12** Landing on one's own property allows renovation: cost 10% of current market value; restores depreciation, resets age.
 
 **National economic events (Rule-LK 18)**
 - [x] **R3.13** Every 15 rounds, one of the 8 events (Tourism Boom, Fuel Crisis, Heavy Monsoon, Economic Recession, Stock Market Boom, Government Housing Programme, Foreign Investment, Political Unrest) fires, affecting **all** players for 15 rounds, with the exact listed effects. Interest-rate effects are relative (**D21**).
@@ -146,7 +146,7 @@ such override is a numbered decision so it can be defended at the viva.
 **Building condition & maintenance (Rule-LK 25–29)**
 - [x] **R3.18** Every building starts at 100% condition, −2% at the end of every round; rent factor by condition band (Table 3): 90–100→100%, 75–89→90%, 50–74→75%, 25–49→50%, <25→closed (no rent).
 - [x] **R3.19** Maintenance only at the start of the owner's turn: house 5% / hotel 8% of construction cost, restores 100%, any number of buildings if affordable.
-- [ ] **R3.20** Maintenance ignored >20 consecutive rounds → structural damage: property value −15%, max rent −25%, future maintenance +50% (LK 28). Renovating a structurally damaged building costs 25% of replacement value and restores value, rent and condition (LK 29).
+- [x] **R3.20** Maintenance ignored >20 consecutive rounds → structural damage: property value −15%, max rent −25%, future maintenance +50% (LK 28). Renovating a structurally damaged building costs 25% of replacement value and restores value, rent and condition (LK 29).
 
 **Dynamic property market (Rule-LK 30–34)**
 - [x] **R3.21** Every 10 rounds: one random group booms (+15% purchase price, +15% mortgage, +25% rent, +10% construction, +20% value), another declines (−15% value, −20% rent, −10% mortgage, −25% auction opening), each lasting 10 rounds; no group repeats the same event in consecutive reviews; 30-round cooldown per group; concurrent effects stack cumulatively (LK 34, mechanics per **D12**).

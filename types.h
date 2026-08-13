@@ -172,6 +172,11 @@ typedef enum {
 #define BASE_INTEREST_PCT    8   /* Table 9 Stable Economy, D21              */
 #define INS_ROUNDS          20   /* LK 9                                     */
 #define INS_WARN_ROUNDS      3   /* LK 9                                     */
+#define INS_BASIC_PCT        5   /* App E: premium, of current value         */
+#define INS_COMPREHENSIVE_PCT 10 /* App E                                    */
+#define INS_BUSINESS_PCT    15   /* App E                                    */
+#define BI_RENT_ROUNDS       5   /* D3: Business Interruption's lost rent    */
+#define REPAIR_PCT          50   /* D1: of the buildings' construction cost  */
 #define MAX_HOUSES           4   /* Rule 9                                   */
 #define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
 #define COMMUNITY_PCT       10   /* D16: of total property assets            */
@@ -180,8 +185,13 @@ typedef enum {
 #define MAINT_HOTEL_PCT      8   /* LK 27: per hotel, of construction cost   */
 #define DEPREC_START_AGE    50   /* LK 16                                    */
 #define DEPREC_CAP_PCT      30   /* LK 16                                    */
-#define RENOVATE_PCT        10   /* LK 17                                    */
+#define DEPREC_EVERY         5   /* LK 16: one point per five rounds         */
+#define RENOVATE_PCT        10   /* LK 17: of current market value           */
 #define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
+#define STRUCT_VALUE_PCT   -15   /* LK 28: value penalty                     */
+#define STRUCT_RENT_PCT     75   /* LK 28: max rent, i.e. -25%               */
+#define STRUCT_MAINT_PCT    50   /* LK 28: upkeep costs half again           */
+#define STRUCT_RENOVATE_PCT 25   /* LK 29: of replacement value              */
 #define MARKET_COOLDOWN     30   /* LK 33                                    */
 #define DECK_SIZE           20   /* App A                                    */
 
@@ -337,6 +347,15 @@ int         net_worth(const GameState *g, int p);
 void credit(GameState *g, int p, int amt);
 bool charge(GameState *g, int p, int amt, int toPlayer);
 
+/* finance.c -- insurance (S1.2, LK 8-9, App E). premium reads square_value,
+   so a quote tracks inflation and the market without a line of its own.
+   tick_insurance runs once per round, warns at exactly INS_WARN_ROUNDS and
+   lapses the policy at zero. */
+int  premium(const GameState *g, int sq, InsuranceType tier);
+void buy_policy(GameState *g, int p, int sq, InsuranceType tier);
+void tick_insurance(GameState *g);
+const char *insurance_name(InsuranceType tier);
+
 /* finance.c -- Rule 11's debt recovery and Rule 14's bankruptcy (D11).
    raise_funds is called by charge and by nothing else; creditor is -1 when
    the Bank is owed. */
@@ -407,6 +426,12 @@ int building_cost(const GameState *g, int sq, bool hotel);
    rent bands are applied inside square_rent and read nowhere else. */
 void condition_tick(GameState *g);
 int  maintenance_cost(const GameState *g, int sq);
+int  repair_cost(const GameState *g, int sq);
+
+/* board.c -- ageing (LK 16-17). depreciation_tick runs on the five-round
+   cadence; the percentage it accumulates is read inside square_value. */
+void depreciation_tick(GameState *g);
+int  structural_renovation_cost(const GameState *g, int sq);
 
 /* events.c -- the effect registry (D12). effect_modifier is the read side,
    consulted by all four choke points and by the two economy-wide rates;
@@ -429,6 +454,12 @@ void national_event(GameState *g);
 void regional_card(GameState *g);
 void government_regulation(GameState *g);
 
+/* events.c -- LK 10-11. fire_disaster strikes one developed property every
+   ten rounds; auto_repairs runs every round, so damage pauses a building's
+   income rather than ending it. A payout consumes the policy (D20). */
+void fire_disaster(GameState *g);
+void auto_repairs(GameState *g);
+
 /* events.c -- Appendix A's deck. Shuffled once in game_init and walked as a
    circular queue, which is what "returned to the bottom" means for an array
    plus an index: nothing moves and every card appears before any repeats. */
@@ -450,6 +481,8 @@ bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
 int  decide_build(GameState *g, int p);
 int  decide_maintenance(GameState *g, int p);
+int  decide_insurance(GameState *g, int p, InsuranceType *tier);
+bool decide_renovate(GameState *g, int p, int sq);
 
 /* decide_bank returns the one LK 5 action to take on this landing (R1.8),
    writing the sum involved to *amount for the three that need one. */
