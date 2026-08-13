@@ -61,6 +61,7 @@ bool game_init(GameState *g, const char *csvPath)
     g->econ.activeRegulation  = -1;
     g->econ.lastBoomGroup     = GRP_NONE;
     g->econ.lastDeclineGroup  = GRP_NONE;
+    g->econ.activeCard        = -1;
 
     g->round = 0;
     return true;
@@ -732,6 +733,14 @@ void play_round(GameState *g)
     accrue_interest(g);             /* LK 4, D4                            */
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
+
+    /* The registry ages BEFORE this round's cadences fire, so that nothing
+       created below is docked a round the moment it is created. D13 writes
+       the tick after the cadences; see the note on tick_effects for why that
+       defeats its own stated intent. */
+    tick_effects(g);                /* D12, LK 35                          */
+    tick_cooldowns(g);              /* LK 33                               */
+
     round_summary(g);
     market_conditions(g);
 }

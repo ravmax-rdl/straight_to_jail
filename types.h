@@ -184,6 +184,20 @@ typedef enum {
 #define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
 #define MARKET_COOLDOWN     30   /* LK 33                                    */
 #define DECK_SIZE           20   /* App A                                    */
+
+/* Cadences and durations for the timed systems (D13). Every one of these is
+   both how often a system fires and how long what it creates survives; where
+   the two coincide, as they do for regulations, one replaces the previous
+   with no code because the old record has already expired. */
+#define INFLATION_EVERY     10   /* LK 12                                    */
+#define MARKET_EVERY        10   /* LK 30                                    */
+#define MARKET_ROUNDS       10   /* LK 31-32                                 */
+#define EVENT_EVERY         15   /* LK 18, Table 4                           */
+#define EVENT_ROUNDS        15   /* LK 18                                    */
+#define CARD_ROUNDS         15   /* Table 4, App A                           */
+#define REGULATION_EVERY    20   /* LK 24                                    */
+#define REGULATION_ROUNDS   20   /* LK 24                                    */
+#define ANTI_SPEC_CAP        3   /* LK 24, D25: undeveloped properties       */
 #define STATION_PRICE     1500   /* clarification: railways and utilities    */
 #define STATION_MORTGAGE   750   /* clarification: 50% of station price      */
 
@@ -269,6 +283,13 @@ typedef struct {
     int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
     int  lastBoomGroup, lastDeclineGroup;
     int  activeRegulation;        /* -1 = none                               */
+
+    /* The Table 4 card currently in force, and the round it was drawn. The
+       LK 36 block must name it, and a name is the one thing an Effect record
+       cannot carry -- so the identity is stored and the rounds remaining are
+       derived from D19's single clock rather than kept in a second counter
+       that could drift from the registry. -1 = none. */
+    int  activeCard, activeCardRound;
     Effect effects[MAX_EFFECTS];
     int    effectCount;
 } Economy;
@@ -384,9 +405,16 @@ int building_cost(const GameState *g, int sq, bool hotel);
 void condition_tick(GameState *g);
 int  maintenance_cost(const GameState *g, int sq);
 
-/* events.c -- the effect registry (D12). Stubbed to 0 until milestone 4;
-   the signature is final. */
-int effect_modifier(const GameState *g, EffectKind kind, int square, int player);
+/* events.c -- the effect registry (D12). effect_modifier is the read side,
+   consulted by all four choke points and by the two economy-wide rates;
+   square is -1 for those, since they belong to no square. tick_effects and
+   tick_cooldowns run once per round, ahead of the cadenced systems so that
+   nothing created this round is aged by this round's tick. */
+void effect_push(GameState *g, EffectKind kind, EffectScope scopeKind, int scope,
+                 int magnitudePct, int owner, int rounds);
+int  effect_modifier(const GameState *g, EffectKind kind, int square, int player);
+void tick_effects(GameState *g);
+void tick_cooldowns(GameState *g);
 
 /* players.c -- the decision engines. Placeholder bodies until milestone 6;
    the signatures are final, so that milestone touches players.c and no other
