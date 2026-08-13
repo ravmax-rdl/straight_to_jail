@@ -540,6 +540,26 @@ bool group_monopoly(const GameState *g, int p, PropertyGroup grp)
     return members > 0;
 }
 
+/* How many purchasable squares p holds that carry no buildings.
+ *
+ * The Anti-Speculation Act's base (LK 24, D25). Railways and utilities count:
+ * neither can ever be developed, so both are permanently undeveloped holdings
+ * and the rule is aimed at exactly that -- accumulating board without
+ * improving it.
+ */
+int count_undeveloped(const GameState *g, int p)
+{
+    int i, n = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].owner == p && is_purchasable(g, i)
+            && development_level(g, i) == 0) {
+            n++;
+        }
+    }
+    return n;
+}
+
 /* How far a square is developed, on one scale: 0-4 houses, or MAX_HOUSES + 1
  * for a hotel.
  *

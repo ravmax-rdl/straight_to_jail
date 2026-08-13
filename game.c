@@ -786,6 +786,9 @@ void play_round(GameState *g)
         national_event(g);          /* LK 18: the whole board              */
         regional_card(g);           /* Table 4: named squares              */
     }
+    if (g->round % REGULATION_EVERY == 0) {
+        government_regulation(g);   /* LK 24                               */
+    }
 
     round_summary(g);
     market_conditions(g);

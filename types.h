@@ -390,6 +390,7 @@ bool is_purchasable(const GameState *g, int sq);
 int  count_owned(const GameState *g, int p, SquareType type);
 bool group_monopoly(const GameState *g, int p, PropertyGroup grp);
 int  development_level(const GameState *g, int sq);
+int  count_undeveloped(const GameState *g, int p);
 const char *group_name(PropertyGroup grp);
 
 /* board.c -- the choke points. Every timed modifier in the game is read in
@@ -425,6 +426,7 @@ void draw_inflation(GameState *g);
 void market_review(GameState *g);
 void national_event(GameState *g);
 void regional_card(GameState *g);
+void government_regulation(GameState *g);
 
 /* events.c -- LK 36 block queries. game.c owns every formatted block, so
    these answer rather than print. Both read the live registry, so there is no

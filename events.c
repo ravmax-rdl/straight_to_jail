@@ -490,10 +490,14 @@ static const EconomicEvent REGIONAL_CARDS[] = {
 #define REGIONAL_CARD_COUNT ((int)(sizeof REGIONAL_CARDS / sizeof REGIONAL_CARDS[0]))
 
 /* Push a row's whole effect list and print its three-line announcement.
-   owner is -1 for the board-wide systems and a player for Appendix A's
-   cards, which reuse this in milestone 4.6. */
+ *
+ * owner is -1 for the board-wide systems and a player for Appendix A's cards,
+ * which reuse this in 4.6. suffix is section 5's " Introduced." on a
+ * regulation and "" everywhere else -- a difference in the template rather
+ * than in the row, so it belongs at the print rather than in the table.
+ */
 static void fire_event(GameState *g, const EconomicEvent *ev, const char *heading,
-                       int owner, int rounds)
+                       const char *suffix, int owner, int rounds)
 {
     int i;
 
@@ -503,7 +507,7 @@ static void fire_event(GameState *g, const EconomicEvent *ev, const char *headin
     }
 
     printf("%s\n", heading);
-    printf("%s\n", ev->name);
+    printf("%s%s\n", ev->name, suffix);
     printf("%s\n", ev->detail);
 }
 
@@ -517,7 +521,7 @@ void national_event(GameState *g)
 {
     const EconomicEvent *ev = &NATIONAL_EVENTS[rng_range(0, NATIONAL_EVENT_COUNT - 1)];
 
-    fire_event(g, ev, "Economic Event", -1, EVENT_ROUNDS);
+    fire_event(g, ev, "Economic Event", "", -1, EVENT_ROUNDS);
 }
 
 /* Table 4, every fifteen rounds. The chosen row is remembered because the
@@ -529,7 +533,7 @@ void regional_card(GameState *g)
 
     g->econ.activeCard      = idx;
     g->econ.activeCardRound = g->round;
-    fire_event(g, &REGIONAL_CARDS[idx], "Regional Development", -1, CARD_ROUNDS);
+    fire_event(g, &REGIONAL_CARDS[idx], "Regional Development", "", -1, CARD_ROUNDS);
 }
 
 /* The LK 36 block's third section. NULL when nothing is in force.
@@ -554,4 +558,93 @@ const char *active_card(const GameState *g, int *magnitudePct, int *roundsLeft)
     *magnitudePct = REGIONAL_CARDS[g->econ.activeCard].eff[0].magnitudePct;
     *roundsLeft   = left;
     return REGIONAL_CARDS[g->econ.activeCard].name;
+}
+
+/* ------------------------------------------------ government regulations -- */
+
+/* LK 24's eight, every twenty rounds, each lasting twenty.
+ *
+ * "Replacing the previous one" needs no code. The cadence and the duration
+ * are the same number, so tick_effects has already dropped the outgoing
+ * regulation's record by the time this runs -- the tick fires ahead of the
+ * cadences. That coincidence is worth naming rather than relying on silently,
+ * which is why REGULATION_EVERY and REGULATION_ROUNDS are separate constants
+ * that happen to be equal: if either moved, this would need a real removal.
+ *
+ * Luxury Property Tax has no row here because D24 makes it a one-off charge
+ * on activation rather than a standing modifier. It is handled below.
+ */
+static const EconomicEvent REGULATIONS[] = {
+    { "Increase Property Tax", "Income tax rises by half.",
+      { { EFF_TAX_MUL, SCOPE_GLOBAL, 0, +50 } }, 1 },
+
+    { "Reduce Loan Interest", "Loan interest falls by 2 percentage points.",
+      { { EFF_INTEREST_ADD, SCOPE_GLOBAL, 0, -2 } }, 1 },
+
+    { "Housing Subsidy", "Construction costs reduced by 30%.",
+      { { EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, -30 } }, 1 },
+
+    /* D24: charged once on activation, not a standing modifier at all. The
+       zero effect count is what says so. */
+    { "Luxury Property Tax", "Hotel properties are levied 25% of their value.",
+      { { EFF_VALUE_MUL, SCOPE_GLOBAL, 0, 0 } }, 0 },
+
+    { "Railway Modernization", "Railway rents rise by 25%.",
+      { { EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, +25 } }, 1 },
+
+    { "Electricity Tariff Revision", "Utility rents rise by 20%.",
+      { { EFF_UTILITY_RENT_MUL, SCOPE_GLOBAL, 0, +20 } }, 1 },
+
+    { "Insurance Regulation", "Premiums fall by 15%, coverage unchanged.",
+      { { EFF_PREMIUM_MUL, SCOPE_GLOBAL, 0, -15 } }, 1 },
+
+    { "Anti-Speculation Act", "No player may hold more than three undeveloped properties.",
+      { { EFF_MAX_PROPERTIES, SCOPE_GLOBAL, 0, ANTI_SPEC_CAP } }, 1 }
+};
+#define REGULATION_COUNT ((int)(sizeof REGULATIONS / sizeof REGULATIONS[0]))
+#define REG_LUXURY_TAX 3
+
+/* D24. LK 24 calls this tax annual but gives no per-round cadence to work
+ * from, unlike LK 4, which is why D4 could take that rule literally and this
+ * one cannot. A regulation runs about twenty rounds, so charging once on
+ * activation is the closest available reading of "annual".
+ *
+ * The base is the property's value INCLUDING its buildings, which is the only
+ * reading under which "luxury" means anything -- a hotel is the luxury being
+ * taxed, and square_value alone would ignore it.
+ */
+static void levy_luxury_tax(GameState *g)
+{
+    char b[FMT_BUF];
+    int  sq;
+
+    for (sq = 0; sq < NUM_SQUARES; sq++) {
+        const Square *s = &g->board[sq];
+        int           base, due;
+
+        if (!s->hotel || s->owner < 0) {
+            continue;
+        }
+
+        base = square_value(g, sq) + building_cost(g, sq, true);
+        due  = pct_of(base, 25);
+
+        printf("%s is levied on %s.\n", g->players[s->owner].name, s->name);
+        if (charge(g, s->owner, due, -1)) {
+            printf("Luxury Tax Paid : LKR %s.\n", fmt_lkr(b, due));
+        }
+    }
+}
+
+/* LK 24, every twenty rounds. */
+void government_regulation(GameState *g)
+{
+    int idx = rng_range(0, REGULATION_COUNT - 1);
+
+    g->econ.activeRegulation = idx;
+    fire_event(g, &REGULATIONS[idx], "Government Regulation", " Introduced.", -1, REGULATION_ROUNDS);
+
+    if (idx == REG_LUXURY_TAX) {
+        levy_luxury_tax(g);
+    }
 }
