@@ -783,6 +783,7 @@ void play_round(GameState *g)
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
     tick_insurance(g);              /* LK 9: policies lapse and warn       */
+    auto_repairs(g);                /* LK 11: damage is a pause, not an end */
 
     /* The registry ages BEFORE this round's cadences fire, so that nothing
        created below is docked a round the moment it is created. D13 writes
@@ -799,6 +800,7 @@ void play_round(GameState *g)
     }
     if (g->round % MARKET_EVERY == 0) {
         market_review(g);           /* LK 30-33                            */
+        fire_disaster(g);           /* LK 10, App E                        */
     }
     if (g->round % EVENT_EVERY == 0) {
         national_event(g);          /* LK 18: the whole board              */

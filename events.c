@@ -677,6 +677,216 @@ void government_regulation(GameState *g)
     }
 }
 
+/* Pick a square that matches a predicate over the whole board, or -1. */
+static int random_square_where(GameState *g, unsigned regionMask, bool developedOnly)
+{
+    int i, pick = -1, seen = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+
+        if (s->owner < 0) {
+            continue;
+        }
+        if (regionMask != 0u && (s->regions & regionMask) == 0u) {
+            continue;
+        }
+        if (developedOnly && development_level(g, i) == 0) {
+            continue;
+        }
+        seen++;
+        if (rng_range(1, seen) == 1) {
+            pick = i;
+        }
+    }
+    return pick;
+}
+
+/* --------------------------------------------- disasters, claims, repairs -- */
+/*
+ * LK 10-11 and Appendix E. Every ten rounds one developed property is struck,
+ * the policy on it pays out if it covers that peril, and the owner pays the
+ * repair bill if it does not. Either way the building earns nothing until it
+ * is put right.
+ */
+
+static const char *DISASTER_NAMES[DIS_COUNT] = {
+    "Fire", "Flood", "Riot", "Building Collapse", "Electrical Failure"
+};
+
+/* D3, as a matrix, because the spec's two statements of it disagree and a
+ * matrix is the only shape in which both can be read at once.
+ *
+ * LK 10's peril list and Appendix E's coverage table do not line up: Building
+ * Collapse and Electrical Failure appear as perils but are covered by no tier
+ * below Business Interruption. This follows both literally rather than
+ * quietly extending Comprehensive to cover them -- an uninsurable peril is a
+ * real thing, and inventing coverage the table does not grant would be the
+ * larger liberty. Appendix E's "Earthquake" never occurs, so it has no row.
+ *
+ * Vandalism is listed under Comprehensive but is not a Disaster this
+ * simulation ever rolls, so Comprehensive's fourth column is unreachable.
+ * Returns the percentage of the repair the policy meets, or 0 for none.
+ */
+static int covers(InsuranceType tier, Disaster peril, bool isHotel)
+{
+    switch (tier) {
+    case INS_BASIC:
+        return (peril == DIS_FIRE || peril == DIS_FLOOD) ? 80 : 0;
+
+    case INS_COMPREHENSIVE:
+        return (peril == DIS_FIRE || peril == DIS_FLOOD || peril == DIS_RIOT)
+               ? 100 : 0;
+
+    case INS_BUSINESS:
+        /* All perils, but hotel properties only -- the tier insures a
+           trading business, and D3 reads a hotel as the thing being traded
+           from. A policy on a house-only property covers nothing. */
+        return isHotel ? 100 : 0;
+
+    case INS_NONE:
+        return 0;
+    }
+    return 0;
+}
+
+/* Choose the peril. Base weight is equal across the five, then Heavy Monsoon
+ * and Political Unrest tilt it through the two risk effects.
+ *
+ * Those two are pushed with +100, which here means "twice as likely" rather
+ * than "+100% of something" -- the only place in the program where an effect
+ * magnitude is a weight rather than a price. Reading them through
+ * effect_modifier rather than as flags on Economy is what makes them expire
+ * on their own when the event does.
+ */
+static Disaster pick_peril(const GameState *g)
+{
+    int weight[DIS_COUNT];
+    int i, total = 0, roll;
+
+    for (i = 0; i < DIS_COUNT; i++) {
+        weight[i] = 100;
+    }
+    weight[DIS_FLOOD] += effect_modifier(g, EFF_FLOOD_RISK, -1, -1);
+    weight[DIS_RIOT]  += effect_modifier(g, EFF_RIOT_RISK, -1, -1);
+
+    for (i = 0; i < DIS_COUNT; i++) {
+        if (weight[i] < 0) {
+            weight[i] = 0;
+        }
+        total += weight[i];
+    }
+    if (total <= 0) {
+        return DIS_FIRE;
+    }
+
+    roll = rng_range(1, total);
+    for (i = 0; i < DIS_COUNT; i++) {
+        roll -= weight[i];
+        if (roll <= 0) {
+            return (Disaster)i;
+        }
+    }
+    return DIS_FIRE;
+}
+
+/* LK 10, every ten rounds. Strikes one developed property at random.
+ *
+ * D20 is the clause easiest to miss and hardest to spot afterwards: a payout
+ * CONSUMES the policy whatever rounds remain on it. A property struck twice
+ * is insured for the first only. The policy is cleared before the claim block
+ * prints, so there is no path through this function that pays twice.
+ */
+void fire_disaster(GameState *g)
+{
+    char     b[FMT_BUF];
+    int      sq = random_square_where(g, 0u, true);
+    Square  *s;
+    Disaster peril;
+    int      cost, coverPct, payout;
+
+    if (sq < 0) {
+        return;                    /* nothing developed yet to strike       */
+    }
+
+    s     = &g->board[sq];
+    peril = pick_peril(g);
+    cost  = repair_cost(g, sq);
+
+    s->damaged = true;                       /* LK 11: earns nothing now   */
+    g->players[s->owner].sufferedLoss = true; /* the Risk Taker's trigger  */
+
+    printf("%s occurred.\n", DISASTER_NAMES[peril]);
+    printf("Affected Property :\n");
+    printf("%s.\n", s->name);
+
+    coverPct = covers(s->policy, peril, s->hotel);
+    if (coverPct == 0) {
+        /* Uninsured, or insured against something else. The owner meets the
+           bill themselves, through charge -- so an owner who cannot afford
+           it goes down the D11 ladder like any other debt. */
+        printf("No claim is payable.\n");
+        if (charge(g, s->owner, cost, -1)) {
+            printf("Repair Cost :\n");
+            printf("LKR %s.\n", fmt_lkr(b, cost));
+        }
+        return;
+    }
+
+    payout = pct_of(cost, coverPct);
+
+    /* D3: Business Interruption also pays five rounds of lost hotel rent, as
+       an immediate lump sum. Read before the policy is cleared, and computed
+       off the undamaged rent -- square_rent would return zero now that the
+       damaged flag is set, which is the loss being compensated. */
+    if (s->policy == INS_BUSINESS) {
+        s->damaged = false;
+        payout += square_rent(g, sq, 0) * BI_RENT_ROUNDS;
+        s->damaged = true;
+    }
+
+    /* D20, before the block prints: the policy is spent. */
+    s->policy       = INS_NONE;
+    s->policyRounds = 0;
+
+    credit(g, s->owner, payout);
+    printf("Insurance Claim Approved.\n");
+    printf("Compensation Paid :\n");
+    printf("LKR %s.\n", fmt_lkr(b, payout));
+}
+
+/* LK 11, once per round. Damage is a pause on the income, not the end of it:
+ * any owner who can cover the bill pays it and the building earns again.
+ *
+ * Cash is tested first rather than left to charge, on the usual principle --
+ * this is the owner choosing to repair, and a player who would have to sell
+ * buildings to fix a building is not in a position to fix it. The square
+ * simply stays damaged until they are.
+ */
+void auto_repairs(GameState *g)
+{
+    char b[FMT_BUF];
+    int  i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        Square *s = &g->board[i];
+        int     cost;
+
+        if (!s->damaged || s->owner < 0) {
+            continue;
+        }
+
+        cost = repair_cost(g, i);
+        if (g->players[s->owner].cash < cost || !charge(g, s->owner, cost, -1)) {
+            continue;
+        }
+
+        s->damaged = false;
+        printf("%s repaired %s.\n", g->players[s->owner].name, s->name);
+        printf("Repair Cost : LKR %s.\n", fmt_lkr(b, cost));
+    }
+}
+
 /* ------------------------------------------- the National Event Card deck -- */
 /*
  * Appendix A. Twenty cards, drawn only by landing on square 7, 22 or 36 --
@@ -774,31 +984,6 @@ static int random_owned_square(GameState *g, int p)
 
     for (i = 0; i < NUM_SQUARES; i++) {
         if (g->board[i].owner != p) {
-            continue;
-        }
-        seen++;
-        if (rng_range(1, seen) == 1) {
-            pick = i;
-        }
-    }
-    return pick;
-}
-
-/* Pick a square that matches a predicate over the whole board, or -1. */
-static int random_square_where(GameState *g, unsigned regionMask, bool developedOnly)
-{
-    int i, pick = -1, seen = 0;
-
-    for (i = 0; i < NUM_SQUARES; i++) {
-        const Square *s = &g->board[i];
-
-        if (s->owner < 0) {
-            continue;
-        }
-        if (regionMask != 0u && (s->regions & regionMask) == 0u) {
-            continue;
-        }
-        if (developedOnly && development_level(g, i) == 0) {
             continue;
         }
         seen++;

@@ -421,6 +421,7 @@ int building_cost(const GameState *g, int sq, bool hotel);
    rent bands are applied inside square_rent and read nowhere else. */
 void condition_tick(GameState *g);
 int  maintenance_cost(const GameState *g, int sq);
+int  repair_cost(const GameState *g, int sq);
 
 /* events.c -- the effect registry (D12). effect_modifier is the read side,
    consulted by all four choke points and by the two economy-wide rates;
@@ -442,6 +443,12 @@ void market_review(GameState *g);
 void national_event(GameState *g);
 void regional_card(GameState *g);
 void government_regulation(GameState *g);
+
+/* events.c -- LK 10-11. fire_disaster strikes one developed property every
+   ten rounds; auto_repairs runs every round, so damage pauses a building's
+   income rather than ending it. A payout consumes the policy (D20). */
+void fire_disaster(GameState *g);
+void auto_repairs(GameState *g);
 
 /* events.c -- Appendix A's deck. Shuffled once in game_init and walked as a
    circular queue, which is what "returned to the bottom" means for an array

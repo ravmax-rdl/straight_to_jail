@@ -656,6 +656,28 @@ int maintenance_cost(const GameState *g, int sq)
     return pct_of(building_cost(g, sq, false) * s->houses, MAINT_HOUSE_PCT);
 }
 
+/* D1: what it costs to put right the buildings standing on a square -- half
+ * of what they currently cost to put up.
+ *
+ * The spec never quantifies a repair, so D1 anchors it to construction. That
+ * makes damage scale with development, which is the behaviour LK 10 clearly
+ * intends (a hotel is a bigger loss than one house), and makes it track
+ * inflation for free through building_cost.
+ *
+ * Note this is the whole square, unlike the D11 ladder's demolition refund,
+ * which prices only the topmost building. A fire does not burn down one
+ * house of four.
+ */
+int repair_cost(const GameState *g, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    if (s->hotel) {
+        return pct_of(building_cost(g, sq, true), REPAIR_PCT);
+    }
+    return pct_of(building_cost(g, sq, false) * s->houses, REPAIR_PCT);
+}
+
 /* Table 3 as a band lookup rather than a formula. The spec gives five bands
  * with hard edges, not a curve, and 89% collecting the same 90% as 75% is
  * the rule rather than an approximation of one.
@@ -726,6 +748,14 @@ int square_rent(const GameState *g, int sq, int diceTotal)
        whole of its meaning. (LK 26's separate closure, for a building decayed
        below 25%, already falls out of condition_rent_pct returning zero.) */
     if (effect_active(g, EFF_CLOSED, sq, s->owner)) {
+        return 0;
+    }
+
+    /* LK 11: a damaged building collects nothing until it is repaired. Only
+       buildings can be damaged, so an undeveloped square is unaffected --
+       and auto_repairs runs every round, so this is a pause on the income
+       rather than the end of it. */
+    if (s->damaged) {
         return 0;
     }
 
