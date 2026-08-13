@@ -359,7 +359,7 @@ void market_review(GameState *g)
  * or regional, so the sign of the magnitude distinguishes a boom from a
  * decline unambiguously.
  */
-static int market_group(const GameState *g, bool boom, int *roundsLeft)
+static int market_group(const GameState *g, bool boom, int *magnitudePct, int *roundsLeft)
 {
     int i;
 
@@ -372,22 +372,24 @@ static int market_group(const GameState *g, bool boom, int *roundsLeft)
         if ((e->magnitudePct > 0) != boom) {
             continue;
         }
-        *roundsLeft = e->roundsLeft;
+        *magnitudePct = e->magnitudePct;
+        *roundsLeft   = e->roundsLeft;
         return e->scope;
     }
 
-    *roundsLeft = 0;
+    *magnitudePct = 0;
+    *roundsLeft   = 0;
     return GRP_NONE;
 }
 
-int boom_group(const GameState *g, int *roundsLeft)
+int boom_group(const GameState *g, int *magnitudePct, int *roundsLeft)
 {
-    return market_group(g, true, roundsLeft);
+    return market_group(g, true, magnitudePct, roundsLeft);
 }
 
-int decline_group(const GameState *g, int *roundsLeft)
+int decline_group(const GameState *g, int *magnitudePct, int *roundsLeft)
 {
-    return market_group(g, false, roundsLeft);
+    return market_group(g, false, magnitudePct, roundsLeft);
 }
 
 /* ---------------------------------------- national events, Table 4 cards -- */

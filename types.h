@@ -469,8 +469,8 @@ void draw_event_card(GameState *g, int p);
 /* events.c -- LK 36 block queries. game.c owns every formatted block, so
    these answer rather than print. Both read the live registry, so there is no
    second copy of what is active to drift from it. GRP_NONE = nothing. */
-int boom_group(const GameState *g, int *roundsLeft);
-int decline_group(const GameState *g, int *roundsLeft);
+int boom_group(const GameState *g, int *magnitudePct, int *roundsLeft);
+int decline_group(const GameState *g, int *magnitudePct, int *roundsLeft);
 const char *active_card(const GameState *g, int *magnitudePct, int *roundsLeft);
 
 /* players.c -- the decision engines. Placeholder bodies until milestone 6;

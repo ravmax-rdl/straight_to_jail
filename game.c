@@ -279,20 +279,29 @@ void market_conditions(const GameState *g)
 
     /* A section with nothing active prints nothing at all -- header, rule and
        body together. LK 36 reports what is in force, and an empty heading
-       reports the absence of something rather than the presence of nothing. */
-    grp = boom_group(g, &left);
+       reports the absence of something rather than the presence of nothing.
+
+       The three bodies are transcribed from the section 5 template, and note
+       that the first two are not shaped like the third: a boom puts its
+       magnitude in brackets after the name on one line, while a regional card
+       puts the name and the magnitude on separate lines. That asymmetry is in
+       the document. The percentage shown is the VALUE_MUL each system pushed,
+       read back out of the registry rather than restated here. */
+    grp = boom_group(g, &pct, &left);
     if (grp != GRP_NONE) {
         printf("Market Boom\n");
         rule_line('-', 13);
-        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
+        printf("Rounds Remaining : %d\n", left);
         printf("\n");
     }
 
-    grp = decline_group(g, &left);
+    grp = decline_group(g, &pct, &left);
     if (grp != GRP_NONE) {
         printf("Market Decline\n");
         rule_line('-', 16);
-        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
+        printf("Rounds Remaining : %d\n", left);
         printf("\n");
     }
 
@@ -300,7 +309,9 @@ void market_conditions(const GameState *g)
     if (card != NULL) {
         printf("Regional Development\n");
         rule_line('-', 23);
-        printf("%s : %+d%%, %d rounds remaining\n", card, pct, left);
+        printf("%s\n", card);
+        printf("(%+d%%)\n", pct);
+        printf("Rounds Remaining : %d\n", left);
         printf("\n");
     }
 
