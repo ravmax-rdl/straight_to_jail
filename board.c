@@ -603,9 +603,52 @@ int development_level(const GameState *g, int sq)
  */
 int square_value(const GameState *g, int sq)
 {
-    const Square *s = &g->board[sq];
+    const Square *s     = &g->board[sq];
 
-    return apply_pct(s->price, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
+    /* LK 16, applied before the market. Depreciation is a property of the
+       building itself -- what age has done to it -- so a boom lifts the
+       depreciated property rather than the property it used to be. */
+    int           value = apply_pct(s->price, -s->depreciationPct);
+
+    return apply_pct(value, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
+}
+
+/* LK 16, on the five-round cadence. One percentage point per tick once a
+ * property has been held longer than DEPREC_START_AGE, capped at
+ * DEPREC_CAP_PCT.
+ *
+ * D19's single clock is what makes this correct without a second counter:
+ * age is round - purchasedRound, so it starts at purchase rather than at the
+ * start of the game and resets when LK 17's renovation resets the field.
+ * Unowned property carries purchasedRound == -1 and never ages -- a vacant
+ * lot has nothing to wear out, and without this test every unsold square
+ * would arrive at the cap by round 80.
+ */
+void depreciation_tick(GameState *g)
+{
+    char b[FMT_BUF];
+    int  i;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        Square *s = &g->board[i];
+
+        if (s->type != SQ_PROPERTY || s->owner < 0 || s->purchasedRound < 0) {
+            continue;
+        }
+        if (g->round - s->purchasedRound <= DEPREC_START_AGE) {
+            continue;
+        }
+        if (s->depreciationPct >= DEPREC_CAP_PCT) {
+            continue;
+        }
+
+        s->depreciationPct++;
+        printf("Property\n");
+        printf("%s\n", s->name);
+        printf("has depreciated by %d%%.\n", s->depreciationPct);
+        printf("Current Value\n");
+        printf("LKR %s.\n", fmt_lkr(b, square_value(g, i)));
+    }
 }
 
 /* D18 again, and the reason this is not square_value: mortgage value comes

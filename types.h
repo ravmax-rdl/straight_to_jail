@@ -185,7 +185,8 @@ typedef enum {
 #define MAINT_HOTEL_PCT      8   /* LK 27: per hotel, of construction cost   */
 #define DEPREC_START_AGE    50   /* LK 16                                    */
 #define DEPREC_CAP_PCT      30   /* LK 16                                    */
-#define RENOVATE_PCT        10   /* LK 17                                    */
+#define DEPREC_EVERY         5   /* LK 16: one point per five rounds         */
+#define RENOVATE_PCT        10   /* LK 17: of current market value           */
 #define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
 #define MARKET_COOLDOWN     30   /* LK 33                                    */
 #define DECK_SIZE           20   /* App A                                    */
@@ -423,6 +424,10 @@ void condition_tick(GameState *g);
 int  maintenance_cost(const GameState *g, int sq);
 int  repair_cost(const GameState *g, int sq);
 
+/* board.c -- ageing (LK 16-17). depreciation_tick runs on the five-round
+   cadence; the percentage it accumulates is read inside square_value. */
+void depreciation_tick(GameState *g);
+
 /* events.c -- the effect registry (D12). effect_modifier is the read side,
    consulted by all four choke points and by the two economy-wide rates;
    square is -1 for those, since they belong to no square. tick_effects and
@@ -472,6 +477,7 @@ int  decide_bid(GameState *g, int p, int sq, int minBid);
 int  decide_build(GameState *g, int p);
 int  decide_maintenance(GameState *g, int p);
 int  decide_insurance(GameState *g, int p, InsuranceType *tier);
+bool decide_renovate(GameState *g, int p, int sq);
 
 /* decide_bank returns the one LK 5 action to take on this landing (R1.8),
    writing the sum involved to *amount for the three that need one. */

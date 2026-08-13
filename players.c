@@ -185,6 +185,33 @@ int decide_maintenance(GameState *g, int p)
     return -1;
 }
 
+/* Above this much wear, the placeholder pays to reverse it. Section 3 gives
+   the Conservative Banker 10% and the Opportunistic Trader 15%, so this sits
+   at the lower of the two and milestone 6 splits them. */
+#define RENOVATE_ABOVE_PCT 10
+
+/* PLACEHOLDER (milestone 6). LK 17: renovation is offered only on a square
+ * the player is standing on and already owns, so the square comes in rather
+ * than being searched for -- the caller in land_on already knows it.
+ *
+ * Worth doing at all only when there is something to reverse. A renovation
+ * costs a tenth of market value and buys back the depreciation and the age;
+ * on an undepreciated property it buys nothing.
+ */
+bool decide_renovate(GameState *g, int p, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    if (s->owner != p || s->type != SQ_PROPERTY) {
+        return false;
+    }
+    if (s->depreciationPct <= RENOVATE_ABOVE_PCT) {
+        return false;
+    }
+
+    return g->players[p].cash >= pct_of(square_value(g, sq), RENOVATE_PCT);
+}
+
 /* PLACEHOLDER (milestone 6). R1.9 and S1.2: landing on an insurance square
  * buys or renews ONE policy on ONE property, so this returns a single square
  * or -1 and writes the tier it wants to *tier.
