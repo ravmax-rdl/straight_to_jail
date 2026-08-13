@@ -45,7 +45,7 @@ typedef struct {
 static const Profile PROFILE[] = {
     /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
     /* STRAT_CONSERVATIVE */ {  90, 90, 10, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
-    /* STRAT_RISKTAKER    */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC },
+    /* STRAT_RISKTAKER    */ { 999, 25, 30, true,  true,  INS_BASIC, INS_COMPREHENSIVE },
     /* STRAT_OPPORTUNIST  */ {  60, 75, 10, true,  false, INS_BASIC, INS_BASIC }
 };
 
@@ -196,6 +196,11 @@ static bool wants_to_buy(GameState *g, int p, int sq)
         return buy_conservative(g, p, sq);
 
     case STRAT_RISKTAKER:
+        /* R4.3: buys every available property, and invests through
+           downturns -- so unlike the Conservative Banker there is
+           deliberately no market test here at all. */
+        return g->players[p].cash >= square_value(g, sq);
+
     case STRAT_OPPORTUNIST:
         return g->players[p].cash >= square_value(g, sq);
     }
@@ -254,8 +259,15 @@ static int bid_ceiling(GameState *g, int p, int sq)
         }
         break;
 
-    case STRAT_CONSERVATIVE:
     case STRAT_RISKTAKER:
+        /* R4.3: bids until its cash is gone. PROFILE carries a percentage
+           high enough that the ceiling never binds, leaving decide_bid's
+           cash test as the only thing that stops it -- which is exactly what
+           the bullet says. LK 22 caps the bid at cash regardless, so this
+           cannot bid money it does not have. */
+        break;
+
+    case STRAT_CONSERVATIVE:
     case STRAT_OPPORTUNIST:
         break;
     }
@@ -591,6 +603,40 @@ static BankAction bank_conservative(GameState *g, int p, int *amount)
     return BANK_NONE;
 }
 
+/* R4.3. Borrows the maximum and never voluntarily reduces it.
+ *
+ * There is no repayment arm at all, and that is the bullet rather than an
+ * omission: "always borrows the max, refinances often" describes a player who
+ * treats a loan as permanent capital. Under D4 and R1.8 that ends in
+ * foreclosure, which is the point -- this is the personality that exercises
+ * milestone 3's failure paths.
+ */
+static BankAction bank_risktaker(GameState *g, int p, int *amount)
+{
+    const Player *pl = &g->players[p];
+    int           cap;
+
+    if (pl->loan.active) {
+        cap = loan_capacity(g, p);
+        if (cap > 0) {
+            *amount = cap;
+            return BANK_INCREASE;                /* R4.3: refinances often  */
+        }
+        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+            return BANK_EXTEND;
+        }
+        return BANK_NONE;
+    }
+
+    cap = max_loan(g, p);
+    if (cap > 0) {
+        *amount = cap;                           /* R4.3: always the max    */
+        return BANK_OBTAIN;
+    }
+
+    return BANK_NONE;
+}
+
 static BankAction bank_baseline(GameState *g, int p, int *amount)
 {
     const Player *pl = &g->players[p];
@@ -642,6 +688,9 @@ BankAction decide_bank(GameState *g, int p, int *amount)
         return bank_conservative(g, p, amount);
 
     case STRAT_RISKTAKER:
+        return bank_risktaker(g, p, amount);
+
+
     case STRAT_OPPORTUNIST:
         return bank_baseline(g, p, amount);
     }
