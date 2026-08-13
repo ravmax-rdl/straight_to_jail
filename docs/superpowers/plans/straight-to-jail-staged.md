@@ -1120,20 +1120,20 @@ Each `decide_*` becomes a `switch (g->players[p].strat)` with one arm per person
 changes, no other file touched.** Keep a comment checklist mapping each §3 bullet to the line implementing it; that
 mapping is what a viva question will ask for.
 
-- [ ] **Step 1 — Aggressive Investor (§3.1):** always buys if one future rent remains payable; prefers squares that
+- [x] **Step 1 — Aggressive Investor (§3.1):** always buys if one future rent remains payable; prefers squares that
       complete a group; prioritises Galle Face (39) and Nuwara Eliya (37); always bids, up to 120% of `square_value`
       (**D9**); max houses immediately, hotels as soon as legal; borrows whenever the funds raise projected rent;
       repays only when cash exceeds twice the loan; Basic on houses, Comprehensive on hotels; never sells voluntarily.
-- [ ] **Step 2 — Conservative Banker (§3.2):** buys only if ≥50% of cash remains afterwards; prefers railways and
+- [x] **Step 2 — Conservative Banker (§3.2):** buys only if ≥50% of cash remains afterwards; prefers railways and
       utilities; refuses purchases while a global `VALUE_MUL` is negative (a recession); bids strictly below
       `square_value`; borrows only when bankruptcy is otherwise unavoidable, repays in full at every Bank visit;
       Comprehensive on every developed property; **no hotels while any loan is outstanding**; renovates above 10%
       depreciation.
-- [ ] **Step 3 — Risk Taker (§3.3):** buys every available property; prefers expensive groups; always borrows the
+- [x] **Step 3 — Risk Taker (§3.3):** buys every available property; prefers expensive groups; always borrows the
       maximum and refinances at every opportunity; bids until cash is exhausted; hotels as early as possible; insures
       **only** after `sufferedLoss` is set; ignores depreciation until repair is unavoidable; sells lower-value
       properties to fund premium developments.
-- [ ] **Step 4 — Opportunistic Trader (§3.4):** buys only when projected appreciation exceeds construction cost, where
+- [x] **Step 4 — Opportunistic Trader (§3.4):** buys only when projected appreciation exceeds construction cost, where
       projected appreciation is `square_value × (sum of active positive modifiers − active negative) / 100` read
       straight from `effect_modifier` (**D9**); prefers auctions to direct purchase; borrows only when projected return
       beats `interestRatePct`; delays construction while inflation is positive, accelerates while `BUILD_COST_MUL` is
@@ -1149,42 +1149,42 @@ exercises milestone 3's failure paths; if it never defaults in five seeds, `deci
 
 ### 6.2 Output audit
 
-- [ ] **Step 5:** Extract the §5 templates for side-by-side comparison:
+- [x] **Step 5:** Extract the §5 templates for side-by-side comparison:
       `pdftotext -layout assets/Assignment_1_unlocked.pdf - > spec.txt`, then read from
       `5 Required Output Messages` to `A National Event Cards`.
-- [ ] **Step 6:** Capture a full run: `./monopoly 42 > run.txt`.
-- [ ] **Step 7:** Walk all 23 templates: pre-game, roll-off, dice roll, movement, passing GO, purchase, rent, house
+- [x] **Step 6:** Capture a full run: `./monopoly 42 > run.txt`.
+- [x] **Step 7:** Walk all 23 templates: pre-game, roll-off, dice roll, movement, passing GO, purchase, rent, house
       construction, hotel construction, loan obtained, loan repaid, loan default, insurance purchase, insurance expiry,
       disaster, auction, economic event, government regulation, depreciation, bankruptcy, round summary, GAME OVER,
       market conditions.
-- [ ] **Step 8:** Check the details that are easy to get wrong and are graded: spaces around colons
+- [x] **Step 8:** Check the details that are easy to get wrong and are graded: spaces around colons
       (`Cash : LKR 12,300`, never `Cash: LKR 12,300`); trailing full stops present on some lines and absent on others;
       which values sit on their own line; rule-line lengths (45 for the round summary, 41 for market conditions);
       blank lines only where **D26** says. Milestone 1 already measured all of these against `pdftotext -layout` output
       and matched them exactly, so this step is a re-check, not a discovery.
-- [ ] **Step 8a:** Resolve the one block §5 cannot arbitrate. The `GAME OVER` template straddles a PDF page break and
+- [x] **Step 8a:** Resolve the one block §5 cannot arbitrate. The `GAME OVER` template straddles a PDF page break and
       extracts tight above it and blank-separated below it — the document contradicts itself. Milestone 1 emits it
       compact, matching the round summary. If the lecturer can be asked, ask; otherwise leave it, and note that the
       choice is confined to `final_report` and is a five-line change either way.
-- [ ] **Step 9:** Confirm no money prints without separators: `grep -nE 'LKR [0-9]{4,}' run.txt` must return nothing.
-- [ ] **Step 10:** Fix every mismatch found.
+- [x] **Step 9:** Confirm no money prints without separators: `grep -nE 'LKR [0-9]{4,}' run.txt` must return nothing.
+- [x] **Step 10:** Fix every mismatch found.
 
 ### 6.3 Final validation
 
-- [ ] **Step 11:** Both builds silent: `gcc *.c -o monopoly` and `gcc -std=c99 -Wall -Wextra -pedantic *.c -o monopoly`.
-- [ ] **Step 12:** Five seeds to completion — `for s in 1 7 42 99 12345; do ./monopoly $s > run-$s.txt || echo "FAILED
+- [x] **Step 11:** Both builds silent: `gcc *.c -o monopoly` and `gcc -std=c99 -Wall -Wextra -pedantic *.c -o monopoly`.
+- [x] **Step 12:** Five seeds to completion — `for s in 1 7 42 99 12345; do ./monopoly $s > run-$s.txt || echo "FAILED
       $s"; done`. None may crash, hang, or await input.
-- [ ] **Step 13:** Confirm both endings occur across the seed set — at least one 500-round game and at least one early
+- [x] **Step 13:** Confirm both endings occur across the seed set — at least one 500-round game and at least one early
       win by bankruptcy. Force the second with a low `START_CASH` if no seed produces it, then restore.
-- [ ] **Step 14:** Determinism: `./monopoly 42 > a.txt && ./monopoly 42 > b.txt && diff a.txt b.txt` — no output.
-- [ ] **Step 15:** No interaction: `./monopoly 42 < /dev/null` completes normally.
-- [ ] **Step 16:** `make debug` across all five seeds — no invariant assertion fires.
-- [ ] **Step 17:** Constraint sweep — `grep -rn "malloc\|calloc\|realloc\|getline\|math\.h" *.c *.h` returns nothing
+- [x] **Step 14:** Determinism: `./monopoly 42 > a.txt && ./monopoly 42 > b.txt && diff a.txt b.txt` — no output.
+- [x] **Step 15:** No interaction: `./monopoly 42 < /dev/null` completes normally.
+- [x] **Step 16:** `make debug` across all five seeds — no invariant assertion fires.
+- [x] **Step 17:** Constraint sweep — `grep -rn "malloc\|calloc\|realloc\|getline\|math\.h" *.c *.h` returns nothing
       but the comments explaining their absence; `grep -n "double" *.c` returns only the three helpers in
       `finance.c`; no file-scope variable outside `const` tables. Then the CSV contract: no source file contains a
       transcribed price table, editing `Rent.csv` changes the next run without recompiling, and running where no
       candidate resolves gives `exit=1` with `./monopoly 42 2>/dev/null | wc -c` → `0`.
-- [ ] **Step 18:** Tick every checkbox in `docs/REQUIREMENTS.md` that now passes. Update `README.md` with build and run
+- [x] **Step 18:** Tick every checkbox in `docs/REQUIREMENTS.md` that now passes. Update `README.md` with build and run
       instructions.
 
 **Commit:** `chore: output conformance and final validation`

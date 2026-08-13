@@ -279,20 +279,29 @@ void market_conditions(const GameState *g)
 
     /* A section with nothing active prints nothing at all -- header, rule and
        body together. LK 36 reports what is in force, and an empty heading
-       reports the absence of something rather than the presence of nothing. */
-    grp = boom_group(g, &left);
+       reports the absence of something rather than the presence of nothing.
+
+       The three bodies are transcribed from the section 5 template, and note
+       that the first two are not shaped like the third: a boom puts its
+       magnitude in brackets after the name on one line, while a regional card
+       puts the name and the magnitude on separate lines. That asymmetry is in
+       the document. The percentage shown is the VALUE_MUL each system pushed,
+       read back out of the registry rather than restated here. */
+    grp = boom_group(g, &pct, &left);
     if (grp != GRP_NONE) {
         printf("Market Boom\n");
         rule_line('-', 13);
-        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
+        printf("Rounds Remaining : %d\n", left);
         printf("\n");
     }
 
-    grp = decline_group(g, &left);
+    grp = decline_group(g, &pct, &left);
     if (grp != GRP_NONE) {
         printf("Market Decline\n");
         rule_line('-', 16);
-        printf("%s : %d rounds remaining\n", group_name((PropertyGroup)grp), left);
+        printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
+        printf("Rounds Remaining : %d\n", left);
         printf("\n");
     }
 
@@ -300,7 +309,9 @@ void market_conditions(const GameState *g)
     if (card != NULL) {
         printf("Regional Development\n");
         rule_line('-', 23);
-        printf("%s : %+d%%, %d rounds remaining\n", card, pct, left);
+        printf("%s\n", card);
+        printf("(%+d%%)\n", pct);
+        printf("Rounds Remaining : %d\n", left);
         printf("\n");
     }
 
@@ -742,6 +753,26 @@ static void build_step(GameState *g, int p)
     }
 }
 
+/* --------------------------------------------------------- liquidation -- */
+
+/* Rule 3 step 7. Two of the four personalities sell to reposition rather than
+ * because they have been forced to (R4.3, R4.4); the other two never do.
+ *
+ * One level per turn, deliberately. Selling realises half of what the
+ * building cost, so a strategy that unwound a whole portfolio in one turn
+ * would destroy more value than any repositioning could recover. Once a turn
+ * is also enough for the decision to be revisited as the market moves, which
+ * is the point of selling ahead of a decline.
+ */
+static void liquidate_step(GameState *g, int p)
+{
+    int sq = decide_liquidate(g, p);
+
+    if (sq >= 0) {
+        sell_one_building(g, p, sq);
+    }
+}
+
 /* --------------------------------------------------------- maintenance -- */
 
 /* Rule 3 step 1 and LK 27. The rule is emphatic that maintenance happens
@@ -805,6 +836,7 @@ void play_turn(GameState *g, int p)
     move_player(g, p, total);                       /* 3. move clockwise  */
     land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
     build_step(g, p);                               /* 6. construction    */
+    liquidate_step(g, p);                           /* 7. financial       */
 
 #ifdef DEBUG
     assert_invariants(g);
