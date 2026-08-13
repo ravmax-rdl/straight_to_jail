@@ -26,7 +26,27 @@
  */
 int money_round(double v)
 {
-    return (int)(v + (v >= 0.0 ? 0.5 : -0.5));
+    double r = v + (v >= 0.0 ? 0.5 : -0.5);
+
+    /* Saturate rather than convert out of range. Casting a double outside
+       int's range is undefined behaviour in C, not merely a wrong number,
+       and milestone 4's inflation puts it within reach of ordinary play:
+       D21 compounds the loan rate with every draw, D4 compounds the
+       principal every round at that rate, and LK 5 sets no limit on how
+       often a term may be extended. Seed 1 reached a balance of 1.2 billion
+       by round 384 that way.
+
+       A debt that large is unpayable whatever number is printed beside it,
+       so the value is not what matters here -- what matters is that the D6'
+       boundary always yields a valid int, and that a saturated result is a
+       recognisable sentinel rather than an arbitrary wrapped one. */
+    if (r >= (double)INT_MAX) {
+        return INT_MAX;
+    }
+    if (r <= (double)INT_MIN) {
+        return INT_MIN;
+    }
+    return (int)r;
 }
 
 /* Scale a value by a signed percentage: apply_pct(1000, 15) == 1150,
@@ -539,11 +559,16 @@ void accrue_interest(GameState *g)
         pl->loan.principal = apply_pct(pl->loan.principal, pl->loan.ratePct);
 
 #ifdef DEBUG
-        /* Compounding is the one place in the program where a figure grows
-           without bound. Real terms cap out in the low hundreds of thousands;
-           anything near INT_MAX means a term or a rate has gone wrong. */
-        if (pl->loan.principal > INT_MAX / 2) {
-            fprintf(stderr, "R%d: %s principal %d is out of range\n",
+        /* Milestone 3 asserted a ceiling here on the reasoning that real
+           terms cap out in the low hundreds of thousands. Inflation retired
+           that premise: D21 lifts the rate every draw and LK 5 lets a term be
+           extended without limit, so a balance in the billions is now a
+           reachable state rather than a symptom. money_round saturates
+           instead of overflowing, which leaves one invariant still worth
+           asserting -- a balance that compounds upward can never come back
+           negative, and if it does the arithmetic has genuinely broken. */
+        if (pl->loan.principal < 0) {
+            fprintf(stderr, "R%d: %s principal went negative (%d)\n",
                     g->round, pl->name, pl->loan.principal);
             abort();
         }
