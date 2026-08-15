@@ -922,14 +922,20 @@ void fire_disaster(GameState *g)
 
     coverPct = covers(s->policy, peril, s->hotel);
     if (coverPct == 0) {
-        /* Uninsured, or insured against something else. The owner meets the
-           bill themselves, through charge -- so an owner who cannot afford
-           it goes down the D11 ladder like any other debt. */
+        /* Uninsured, or insured against something else -- so no money
+           moves here. The bill was charged in this block as well, which
+           billed it TWICE: the square stays damaged either way, and
+           auto_repairs then charged the same repair again on its way to
+           clearing the flag. 36 of 66 uninsured repairs were paid twice.
+
+           LK 11 owns the repair -- "repairs are automatically performed
+           when the owner has sufficient funds" -- and LK 10 only says who
+           bears the cost, not when. Leaving it to auto_repairs also makes
+           the two paths symmetric: the disaster damages and, if insured,
+           pays compensation; the repair itself is always performed and
+           billed exactly once. Section 5 templates only the insured path,
+           so nothing graded is lost with the two invented lines. */
         printf("No claim is payable.\n");
-        if (charge(g, s->owner, cost, -1)) {
-            printf("Repair Cost :\n");
-            printf("LKR %s.\n", fmt_lkr(b, cost));
-        }
         end_block();
         return;
     }

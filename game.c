@@ -1032,7 +1032,9 @@ void play_round(GameState *g)
     }
 
     round_summary(g);
+    end_block();                    /* D26: two different blocks       */
     market_conditions(g);
+    end_block();
 }
 
 /* Rule 15's first ending: the game stops when only one player is still

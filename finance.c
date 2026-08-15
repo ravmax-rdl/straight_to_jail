@@ -306,15 +306,24 @@ void run_auction(GameState *g, int sq, int anchorPlayer)
     printf("LKR %s.\n", fmt_lkr(b, opening));
     printf("\n");
 
-    /* D23: start immediately after the anchor, then clockwise. */
-    seat = (anchorPlayer + 1) % NUM_PLAYERS;
+    /* D23: start immediately after the anchor, then clockwise -- through
+       order[], which is the seating the Rule 2 roll-off decided. Rotating
+       raw player numbers instead walked 0,1,2,3 regardless of where the
+       roll-off had put them, so the bidding order was only correct when
+       the roll-off happened to leave the players in index order. */
+    for (seat = 0; seat < NUM_PLAYERS; seat++) {
+        if (g->order[seat] == anchorPlayer) {
+            break;
+        }
+    }
+    seat = (seat + 1) % NUM_PLAYERS;
 
     /* Each pass either removes a bidder or raises the price by at least
        AUCTION_INC, so the loop cannot spin: withdrawals are bounded by four
        players and raises by the bidders' cash. It ends when the last
        standing bidder is also the high bidder, or when everyone has gone. */
     while (remaining > 0) {
-        int p      = seat;
+        int p      = g->order[seat];
         int minBid = (highBidder < 0) ? opening : highBid + AUCTION_INC;
         int bid;
 
