@@ -42,10 +42,25 @@ typedef struct {
     InsuranceType hotelTier; /* R4.*: cover bought on a hotel property      */
 } Profile;
 
+/* On the tier columns. Three of the four personalities have theirs dictated:
+ * 3.1 buys "only Basic for houses and Comprehensive for hotels", 3.2 "always
+ * Comprehensive for every developed property", 3.4 "Comprehensive only for
+ * high-value developments". 3.3 is the exception -- it says when the Risk
+ * Taker insures ("only after experiencing a financial loss") and never what
+ * it buys, which is the one opening section 3 leaves.
+ *
+ * Business Interruption goes there. D3 confines that tier to hotel
+ * properties, and the Risk Taker builds more hotels than anyone; a
+ * speculative player already carrying a loss, choosing the dearest cover on
+ * the assets most exposed to it, is the reading its section supports. Its
+ * houses stay on Basic, since D3 gives Business Interruption no coverage at
+ * all on a property without a hotel and the premium would buy nothing.
+ */
+
 static const Profile PROFILE[] = {
     /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
     /* STRAT_CONSERVATIVE */ {  90, 90, 10, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
-    /* STRAT_RISKTAKER    */ { 999, 25, 30, true,  true,  INS_BASIC, INS_COMPREHENSIVE },
+    /* STRAT_RISKTAKER    */ { 999, 25, 30, true,  true,  INS_BASIC, INS_BUSINESS },
     /* STRAT_OPPORTUNIST  */ { 100, 75, 15, true,  false, INS_NONE,  INS_COMPREHENSIVE }
 };
 
