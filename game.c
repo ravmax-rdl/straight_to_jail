@@ -50,15 +50,16 @@ bool game_init(GameState *g, const char *csvPath)
         g->order[i] = i;            /* replaced by determine_order          */
     }
 
-    /* Table 9's Stable Economy is where the economy starts (D21). Both rates
-       drift from here: the loan rate for new loans, the tax rate for
-       Income Tax (D2'). */
-    g->econ.interestRatePct = BASE_INTEREST_PCT;
-    g->econ.incomeTaxPct    = INCOME_TAX_PCT;
+    /* D2'. The tax rate drifts from here with inflation. The loan rate needs
+       no seed: D21 derives it from the prevailing condition, and a game that
+       opens with no event and no inflation draw is Table 9's Stable Economy
+       by that reading rather than by an initialiser. */
+    g->econ.incomeTaxPct = INCOME_TAX_PCT;
 
     /* -1 is "none yet" for all three. GRP_NONE happens to be -1 too, which
        is what makes the LK 30 consecutive-repeat check work on round 10. */
     g->econ.activeRegulation  = -1;
+    g->econ.activeEvent       = -1;
     g->econ.lastBoomGroup     = GRP_NONE;
     g->econ.lastDeclineGroup  = GRP_NONE;
     g->econ.activeCard        = -1;

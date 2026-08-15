@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>   /* abort(), in the DEBUG overflow guard only */
+#include <string.h>   /* strcmp(), in the DEBUG table-order guard only */
 
 #include "types.h"
 
@@ -262,14 +263,13 @@ void draw_inflation(GameState *g)
         s->mortgageValue = apply_pct(s->mortgageValue, pct);
     }
 
-    /* D21 and D2'. Both economy-wide rates move by the same factor. The loan
-       rate governs NEW loans only -- every live loan froze its own ratePct at
-       issue under LK 13, and the fact that this line cannot reach it is the
-       whole reason Loan owns that field. This is the most commonly
-       mis-implemented rule in the spec, and here it is correct by
-       construction rather than by remembering. */
-    g->econ.interestRatePct = apply_pct(g->econ.interestRatePct, pct);
-    g->econ.incomeTaxPct    = apply_pct(g->econ.incomeTaxPct, pct);
+    /* D2'. The loan rate used to drift here alongside the tax rate. It no
+       longer exists: D21 now reads the rate straight off Table 9 by the
+       prevailing condition, and inflation reaches it through that table's
+       Moderate and High rows rather than by scaling a stored figure. LK 13's
+       "existing loan rates remain unchanged" is still what makes Loan own its
+       own frozen ratePct -- this line could never reach it either. */
+    g->econ.incomeTaxPct = apply_pct(g->econ.incomeTaxPct, pct);
 
     /* Section 5 gives no template; this matches the economic-event voice of
        its neighbours. */
@@ -489,6 +489,58 @@ static const EconomicEvent NATIONAL_EVENTS[] = {
 };
 #define NATIONAL_EVENT_COUNT ((int)(sizeof NATIONAL_EVENTS / sizeof NATIONAL_EVENTS[0]))
 
+/* D21 keys Table 9 on two of these by identity. Named here, beside the table
+   they index, with a DEBUG check in national_event that the rows have not
+   been reordered underneath them. */
+#define EVENT_RECESSION      3
+#define EVENT_STOCK_BOOM     4
+
+/* The inflation draw above which LK 12's reading is High rather than Moderate
+   Inflation. Strictly above: a draw of exactly 5 is Moderate (D21). */
+#define INFLATION_HIGH_PCT   5
+
+/* The event in force, or -1. Ages exactly as active_card does -- off D19's
+   single clock rather than a second counter that could drift from it. */
+static int active_national_event(const GameState *g)
+{
+    if (g->econ.activeEvent < 0 ||
+        g->round - g->econ.activeEventRound >= EVENT_ROUNDS) {
+        return -1;
+    }
+    return g->econ.activeEvent;
+}
+
+/* D21: which Table 9 row governs a loan written right now.
+ *
+ * The precedence is the clarification's. Economic Recession and Stock Market
+ * Boom are economy-wide conditions and outrank the inflation reading; Table
+ * 9's "Economic Boom" is the LK 18 event, not LK 33's per-group Market Boom,
+ * which is a property condition and would otherwise be in force most rounds.
+ * With neither event running, LK 12's latest draw decides, and a draw at or
+ * below zero is not inflation at all -- that is Stable Economy.
+ *
+ * Every row is reachable because LK 12 draws from a fixed six: -3 and 0 are
+ * Stable, 2 and 5 Moderate, 8 and 12 High.
+ */
+EconomicCondition prevailing_condition(const GameState *g)
+{
+    int ev = active_national_event(g);
+
+    if (ev == EVENT_RECESSION) {
+        return ECON_RECESSION;
+    }
+    if (ev == EVENT_STOCK_BOOM) {
+        return ECON_BOOM;
+    }
+    if (g->econ.inflationPct > INFLATION_HIGH_PCT) {
+        return ECON_HIGH_INFLATION;
+    }
+    if (g->econ.inflationPct > 0) {
+        return ECON_MODERATE_INFLATION;
+    }
+    return ECON_STABLE;
+}
+
 /* Table 4's twelve regional cards. A card naming several squares pushes one
    SCOPE_SQUARE record per square; one whose reach a D14 tag captures exactly
    pushes a single SCOPE_REGION record instead. Both readings are the same to
@@ -569,15 +621,29 @@ static void fire_event(GameState *g, const EconomicEvent *ev, const char *headin
 
 /* LK 18, every fifteen rounds, affecting everyone.
  *
- * D21 is why Economic Recession carries INTEREST_MUL rather than an additive
- * shift: the rule's "+15%" is relative, so 8% becomes 9%, which is the figure
- * section 5's own sample block prints.
+ * The row is remembered for the same reason regional_card remembers its own:
+ * D21 keys Table 9 on the condition, and a condition is an identity that an
+ * Effect record cannot carry. INTEREST_MUL stays on Recession and Stock
+ * Market Boom because under D21 those two shifts now reach EXISTING loans,
+ * whose frozen rate the table never touches.
  */
 void national_event(GameState *g)
 {
-    const EconomicEvent *ev = &NATIONAL_EVENTS[rng_range(0, NATIONAL_EVENT_COUNT - 1)];
+    int idx = rng_range(0, NATIONAL_EVENT_COUNT - 1);
 
-    fire_event(g, ev, "Economic Event", "", -1, EVENT_ROUNDS);
+#ifdef DEBUG
+    /* The two named indices are the whole basis of prevailing_condition;
+       a reordered table would misread the economy in silence. */
+    if (strcmp(NATIONAL_EVENTS[EVENT_RECESSION].name, "Economic Recession") != 0 ||
+        strcmp(NATIONAL_EVENTS[EVENT_STOCK_BOOM].name, "Stock Market Boom") != 0) {
+        fprintf(stderr, "NATIONAL_EVENTS reordered: D21's indices are stale\n");
+        abort();
+    }
+#endif
+
+    g->econ.activeEvent      = idx;
+    g->econ.activeEventRound = g->round;
+    fire_event(g, &NATIONAL_EVENTS[idx], "Economic Event", "", -1, EVENT_ROUNDS);
 }
 
 /* Table 4, every fifteen rounds. The chosen row is remembered because the

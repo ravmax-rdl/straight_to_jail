@@ -476,26 +476,35 @@ static void unlock_collateral(GameState *g, int p)
     }
 }
 
-/* D21: the rate a NEW loan would be written at right now. Additive
- * adjustments first -- LK 24's Reduce Loan Interest and Appendix A's rate
- * cards are percentage points -- then the relative shifts that large events
- * apply.
+/* Appendix D, Table 9, in the table's own order -- indexed by
+   EconomicCondition. This is the whole of the table's contribution and the
+   only place these five figures appear. */
+static const int TABLE9_RATE[] = { 5, 8, 10, 12, 15 };
+
+/* D21: the rate a NEW loan would be written at right now.
+ *
+ * Table 9 is a lookup, not a seed: "loan interest rates vary according to the
+ * prevailing economic conditions", so the condition picks the row and the row
+ * IS the rate. Nothing drifts.
+ *
+ * The percentage-point adjustments still land on top. LK 24's Reduce Loan
+ * Interest and Appendix A's Interest Rate Cut and Increase each name a direct
+ * 2-point move, and they describe no condition Table 9 has a row for -- so
+ * they modify the row rather than being expressed by it, and the issued rate
+ * can sit outside the table's band. EFF_INTEREST_MUL is deliberately absent:
+ * Economic Recession and Stock Market Boom already choose their own rows, and
+ * applying their shift here would charge the condition twice. Those two reach
+ * existing loans instead, in accrue_interest.
  *
  * Square is -1 because the rate belongs to the economy rather than to any
- * square; only global and player-scoped effects can reach it.
- *
- * The LK 36 block calls this with p = -1, which is not an afterthought but
- * the point: D21 reads section 5's "Current Loan Interest : 9%" as the stable
- * 8% with Economic Recession's relative +15% applied, so the block has to
- * report the adjusted figure rather than econ.interestRatePct raw. Passing -1
- * keeps a player-scoped rate card out of a board-wide display while still
- * counting every global effect.
+ * square. The LK 36 block passes p = -1, which keeps a player-scoped rate
+ * card out of a board-wide display while still counting every global effect.
  */
 int current_loan_rate(const GameState *g, int p)
 {
-    int rate = g->econ.interestRatePct + effect_modifier(g, EFF_INTEREST_ADD, -1, p);
+    int rate = TABLE9_RATE[prevailing_condition(g)]
+             + effect_modifier(g, EFF_INTEREST_ADD, -1, p);
 
-    rate = apply_pct(rate, effect_modifier(g, EFF_INTEREST_MUL, -1, p));
     return rate < 0 ? 0 : rate;       /* a cut may reach zero, never below */
 }
 

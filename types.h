@@ -91,11 +91,12 @@
  *                     Players keep taking turns in order[] throughout, so a
  *                     round is several turns each             [Rule 15, LK]
  * D20 Single claim    a payout consumes the policy, whatever rounds remain
- * D21 Interest rate   seeds at Table 9 Stable 8%. Inflation applies LK 14
- *                     multiplicatively. Large event shifts are relative
- *                     (EFF_INTEREST_MUL); the explicit +/-2% adjustments
- *                     are percentage points (EFF_INTEREST_ADD), since a
- *                     relative 2% rounds to a no-op. ADD applies first
+ * D21 Interest rate   REVISED. Table 9 is a LOOKUP, not a seed. The
+ *                     prevailing condition picks the row: Recession 15%,
+ *                     Stock Market Boom 5%, else LK 12's draw -- above 5%
+ *                     High 12%, above 0 Moderate 10%, else Stable 8%. The
+ *                     +/-2 point cards still adjust the issued rate; the
+ *                     relative shifts now move LIVE loans instead   [App D]
  * D22 Loan pledge     only the minimum set of assets, highest mortgage
  *                     value first, whose 75% LTV covers the amount
  * D23 Auction order   starts with the player immediately after the current
@@ -198,7 +199,6 @@ typedef enum {
 #define AUCTION_OPEN_PCT    50   /* LK 19                                    */
 #define LOAN_LTV_PCT        75   /* LK 2, D5                                 */
 #define LOAN_ROUNDS         20   /* LK 4, D19                                */
-#define BASE_INTEREST_PCT    8   /* Table 9 Stable Economy, D21              */
 #define INS_ROUNDS          20   /* LK 9                                     */
 #define INS_WARN_ROUNDS      3   /* LK 9                                     */
 #define INS_BASIC_PCT        5   /* App E: premium, of current value         */
@@ -316,6 +316,13 @@ typedef struct {
    flat set of Economy fields cannot work: Appendix A cards are per-player and
    overlapping, and LK 34 requires concurrent effects to stack rather than
    overwrite. */
+/* Table 9's five rows, in the table's own order, so TABLE9_RATE indexes
+   straight off this. D21 decides which one is prevailing. */
+typedef enum {
+    ECON_BOOM, ECON_STABLE, ECON_MODERATE_INFLATION,
+    ECON_HIGH_INFLATION, ECON_RECESSION
+} EconomicCondition;
+
 typedef struct {
     EffectKind kind;
     int  scopeKind;               /* an EffectScope                          */
@@ -327,7 +334,6 @@ typedef struct {
 
 typedef struct {
     int  inflationPct;            /* most recent draw, for the LK 36 block   */
-    int  interestRatePct;         /* current rate for NEW loans only, D21    */
     int  incomeTaxPct;            /* seeded at 15, inflation-adjusted, D2'   */
     int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
     int  lastBoomGroup, lastDeclineGroup;
@@ -339,6 +345,14 @@ typedef struct {
        derived from D19's single clock rather than kept in a second counter
        that could drift from the registry. -1 = none. */
     int  activeCard, activeCardRound;
+
+    /* D21: which LK 18 national event is in force, and when it fired. Stored
+       for the same reason activeCard is -- Table 9 keys on the CONDITION,
+       and a condition is an identity that an Effect record cannot carry.
+       Only Economic Recession and Stock Market Boom are ever read back, but
+       storing the index rather than two flags keeps one fact in one place.
+       -1 = none. */
+    int  activeEvent, activeEventRound;
     Effect effects[MAX_EFFECTS];
     int    effectCount;
 } Economy;
@@ -523,6 +537,7 @@ void draw_event_card(GameState *g, int p);
 int boom_group(const GameState *g, int *magnitudePct, int *roundsLeft);
 int decline_group(const GameState *g, int *magnitudePct, int *roundsLeft);
 const char *active_card(const GameState *g, int *magnitudePct, int *roundsLeft);
+EconomicCondition prevailing_condition(const GameState *g);
 
 /* players.c -- the decision engines. Placeholder bodies until milestone 6;
    the signatures are final, so that milestone touches players.c and no other
