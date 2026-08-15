@@ -74,7 +74,17 @@ int pct_of(int value, int percent)
 
 void credit(GameState *g, int p, int amt)
 {
-    g->players[p].cash += amt;
+    /* D29 saturates rather than wraps. money_round clamps every ratio, but
+       a credit adds to a balance that is already an int, so a saturated
+       loan paid out or a bankruptcy sweeping a saturated estate could still
+       overflow here -- signed overflow being undefined, not merely wrong. */
+    int *cash = &g->players[p].cash;
+
+    if (amt > 0 && *cash > INT_MAX - amt) {
+        *cash = INT_MAX;
+    } else {
+        *cash += amt;
+    }
 }
 
 /* Move amt from p to toPlayer, or to the Bank when toPlayer is -1.
@@ -760,7 +770,7 @@ void redeem_mortgage(GameState *g, int p, int sq)
  */
 void accrue_interest(GameState *g)
 {
-    int i, laps;
+    int i, laps, from;
 
     for (i = 0; i < NUM_PLAYERS; i++) {
         Player *pl = &g->players[i];
@@ -802,7 +812,13 @@ void accrue_interest(GameState *g)
            rounding still happens at each period exactly as LK 4 describes,
            and a player who laps twice is charged twice rather than being
            charged once at a rate raised to a power. */
-        for (laps = pl->laps - pl->lapsPrev; laps > 0; laps--) {
+        /* From the loan's own start, not the round's. A player who passed
+           GO and then borrowed later in the same round was charged for the
+           lap they had already run -- a period the loan did not exist for,
+           and one its twenty-lap term never counted. */
+        from = pl->lapsPrev < pl->loan.issuedLap ? pl->loan.issuedLap
+                                                 : pl->lapsPrev;
+        for (laps = pl->laps - from; laps > 0; laps--) {
             pl->loan.principal = apply_pct(pl->loan.principal, rate);
         }
 

@@ -624,6 +624,29 @@ int square_value(const GameState *g, int sq)
     return apply_pct(value, effect_modifier(g, EFF_VALUE_MUL, sq, s->owner));
 }
 
+/* D39: what the BANK charges for an unowned square, which LK 31 prices
+ * separately from what the square is worth: "purchase prices increase by
+ * 15%" and "property values increase by 20%" are two of its five bullets.
+ * Collapsing them charged a buyer 20% in a boom where the rule says 15%.
+ *
+ * Same base, same depreciation, same structural discount -- they differ
+ * only in which market record they read. Every other rule that moves
+ * "property values" (LK 18's events, LK 32's decline, Table 4's cards)
+ * says exactly that and so moves square_value alone; LK 31 is the only
+ * rule in the spec that names the purchase price, so PRICE_MUL has one
+ * writer. Inflation reaches both, because it moves s->price itself.
+ */
+int purchase_price(const GameState *g, int sq)
+{
+    const Square *s     = &g->board[sq];
+    int           value = apply_pct(s->price, -s->depreciationPct);
+
+    if (s->structDamaged) {
+        value = apply_pct(value, STRUCT_VALUE_PCT);
+    }
+    return apply_pct(value, effect_modifier(g, EFF_PRICE_MUL, sq, s->owner));
+}
+
 /* LK 29: what it costs to undo structural damage -- a quarter of what the
  * buildings on the square would cost to replace.
  *
@@ -656,7 +679,7 @@ int structural_renovation_cost(const GameState *g, int sq)
 void depreciation_tick(GameState *g)
 {
     char b[FMT_BUF];
-    int  i;
+    int  i, age;
 
     for (i = 0; i < NUM_SQUARES; i++) {
         Square *s = &g->board[i];
@@ -664,7 +687,14 @@ void depreciation_tick(GameState *g)
         if (s->type != SQ_PROPERTY || s->owner < 0 || s->purchasedRound < 0) {
             continue;
         }
-        if (g->round - s->purchasedRound <= DEPREC_START_AGE) {
+        /* LK 16 counts from the property's own fiftieth round, not from
+           multiples of five on the game clock. Ticking globally meant a
+           square bought in round 3 first depreciated at round 55 rather
+           than 53, and every square in the game aged in lockstep
+           regardless of when it was bought. */
+        age = g->round - s->purchasedRound;
+        if (age <= DEPREC_START_AGE ||
+            (age - DEPREC_START_AGE) % DEPREC_EVERY != 0) {
             continue;
         }
         if (s->depreciationPct >= DEPREC_CAP_PCT) {
@@ -886,7 +916,7 @@ void condition_tick(GameState *g)
 int square_rent(const GameState *g, int sq, int diceTotal)
 {
     const Square *s = &g->board[sq];
-    int rent;
+    int rent, mul = 0;
 
     if (s->owner < 0 || s->mortgaged) {
         return 0;
@@ -914,10 +944,11 @@ int square_rent(const GameState *g, int sq, int diceTotal)
     case SQ_PROPERTY:
         if (s->hotel) {
             rent = s->baseRent * HOTEL_RENT_MULT;
-            rent = apply_pct(rent, effect_modifier(g, EFF_HOTEL_RENT_MUL, sq, s->owner));
+            mul  = effect_modifier(g, EFF_HOTEL_RENT_MUL, sq, s->owner);
         } else {
             rent = s->baseRent * RENT_MULT[s->houses];
         }
+        mul += effect_modifier(g, EFF_RENT_MUL, sq, s->owner);
         /* LK 25-26, and only where there is something to be in disrepair.
            An undeveloped property collects its full base rent forever: the
            condition percentage describes buildings, and a vacant lot has
@@ -933,16 +964,20 @@ int square_rent(const GameState *g, int sq, int diceTotal)
         if (s->structDamaged) {
             rent = pct_of(rent, STRUCT_RENT_PCT);
         }
-        return apply_pct(rent, effect_modifier(g, EFF_RENT_MUL, sq, s->owner));
+        return apply_pct(rent, mul);
 
     case SQ_RAILWAY:
         rent = RAILWAY_RENT[count_owned(g, s->owner, SQ_RAILWAY) - 1];
-        return apply_pct(rent, effect_modifier(g, EFF_RAILWAY_RENT_MUL, sq, s->owner));
+        mul  = effect_modifier(g, EFF_RAILWAY_RENT_MUL, sq, s->owner)
+             + effect_modifier(g, EFF_RENT_MUL, sq, s->owner);
+        return apply_pct(rent, mul);
 
     case SQ_UTILITY:
         rent = diceTotal * (count_owned(g, s->owner, SQ_UTILITY) == 2
                             ? UTILITY_MULT_BOTH : UTILITY_MULT_ONE);
-        return apply_pct(rent, effect_modifier(g, EFF_UTILITY_RENT_MUL, sq, s->owner));
+        mul  = effect_modifier(g, EFF_UTILITY_RENT_MUL, sq, s->owner)
+             + effect_modifier(g, EFF_RENT_MUL, sq, s->owner);
+        return apply_pct(rent, mul);
 
     case SQ_GO:    case SQ_BANK:      case SQ_INSURANCE: case SQ_TAX:
     case SQ_COMMUNITY: case SQ_EVENT: case SQ_JAIL:      case SQ_PARKING:

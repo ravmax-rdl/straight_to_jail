@@ -492,7 +492,7 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     int     rent;
 
     if (s->owner < 0) {
-        int price = square_value(g, sq);
+        int price = purchase_price(g, sq);   /* D39: LK 31 prices these apart */
 
         if (decide_buy(g, p, sq) && charge(g, p, price, -1)) {
             s->owner          = p;
@@ -1023,9 +1023,7 @@ void play_round(GameState *g)
     /* The cadenced systems, in D13's order. Each fires on its own clock and
        none of them knows about the others -- the registry is what lets them
        compose without a line of coordination here. */
-    if (g->round % DEPREC_EVERY == 0) {
-        depreciation_tick(g);       /* LK 16                               */
-    }
+    depreciation_tick(g);           /* LK 16: each square on its own age   */
     if (g->round % INFLATION_EVERY == 0) {
         draw_inflation(g);          /* LK 12-14                            */
     }

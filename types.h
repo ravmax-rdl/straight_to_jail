@@ -85,6 +85,20 @@
  *                     policy therefore lapses and is rebought like any
  *                     other. The reminder stands as section 5 shows it,
  *                     and the gap is the spec's, not an omission   [LK 9]
+ * D39 Price vs value  LK 31 moves purchase prices +15% and property values
+ *                     +20% as SEPARATE bullets, so purchase_price is its
+ *                     own choke point reading EFF_PRICE_MUL. Every other
+ *                     rule says "property values" and moves square_value
+ *                     alone; LK 32 names no price line          [LK 31]
+ * D40 Cumulative      LK 34: concurrent percentages ADD, never compound.
+ *                     A hotel +100% under a +25% boom collects 225% of
+ *                     base, not 250%. Kinds are summed and applied once,
+ *                     which is also how the general rent shift finally
+ *                     reaches railways and utilities            [LK 34]
+ * D41 Risk doubling   "Riot probability doubles" is about the PROBABILITY.
+ *                     One weight cannot double it -- the others must give
+ *                     up the difference. k doubled of n: 2*(n-k) against
+ *                     (n-2k), which is exactly 2/n each          [LK 18]
  * D38 Struct. damage  LK 28 needs no counter: LK 25's 2%-a-round decay
  *                     already counts, so "more than 20 rounds" IS a
  *                     condition below 60%. Only LK 29's renovation clears
@@ -178,7 +192,8 @@ typedef enum {
    EFF_MAX_PROPERTIES reuses Effect.magnitudePct as a plain count, not a
    percentage -- it carries the Anti-Speculation Act's cap of 3. */
 typedef enum {
-    EFF_VALUE_MUL, EFF_RENT_MUL, EFF_HOTEL_RENT_MUL, EFF_RAILWAY_RENT_MUL,
+    EFF_VALUE_MUL, EFF_PRICE_MUL, EFF_RENT_MUL, EFF_HOTEL_RENT_MUL,
+    EFF_RAILWAY_RENT_MUL,
     EFF_UTILITY_RENT_MUL, EFF_BUILD_COST_MUL, EFF_HOUSE_COST_MUL,
     EFF_PREMIUM_MUL, EFF_MORTGAGE_MUL,
     EFF_AUCTION_OPEN_MUL, EFF_INTEREST_MUL, EFF_INTEREST_ADD, EFF_TAX_MUL,
@@ -510,6 +525,7 @@ const char *group_name(PropertyGroup grp);
    individual Rent.csv price; mortgage_value and building_cost on the
    Appendix B group figures (D18), which is why they are separate functions. */
 int square_value(const GameState *g, int sq);
+int purchase_price(const GameState *g, int sq);
 int mortgage_value(const GameState *g, int sq);
 int square_rent(const GameState *g, int sq, int diceTotal);
 int building_cost(const GameState *g, int sq, bool hotel);

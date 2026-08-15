@@ -282,13 +282,16 @@ void draw_inflation(GameState *g)
 
 /* LK 31 and LK 32, as effect specifications rather than code.
  *
- * LK 31 lists "+15% purchase prices" separately from "+20% property values".
- * In this model those are the same number -- a buyer pays square_value, which
- * is what VALUE_MUL scales -- so the two collapse into one record. Listing
- * both would double the effect on the one figure they describe.
+ * LK 31 lists "+15% purchase prices" separately from "+20% property values"
+ * because they ARE separate, and D39 gives the purchase price its own choke
+ * point. Collapsing them charged a buyer 20% in a boom where the rule says
+ * 15%. LK 32 names no purchase-price line, so a decline moves the value and
+ * leaves the asking price alone -- which is what makes a boom the moment to
+ * buy and a decline the moment to hold.
  */
 static const struct { EffectKind kind; int pct; } BOOM_EFFECTS[] = {
     { EFF_VALUE_MUL,    +20 },
+    { EFF_PRICE_MUL,    +15 },
     { EFF_RENT_MUL,     +25 },
     { EFF_MORTGAGE_MUL, +15 },
     { EFF_BUILD_COST_MUL, +10 }
@@ -862,11 +865,33 @@ static Disaster pick_peril(const GameState *g)
     int weight[DIS_COUNT];
     int i, total = 0, roll;
 
-    for (i = 0; i < DIS_COUNT; i++) {
-        weight[i] = 100;
+    /* "Riot probability doubles" is a statement about the PROBABILITY, and a
+       probability cannot be doubled by raising one weight alone: with five
+       perils at equal weight, doubling the riot weight moves it from 20% to
+       33% because the other four keep theirs. The rest have to give up the
+       difference. For k doubled perils out of n, weights of 2*(n-k) against
+       (n-2k) put each doubled peril at exactly 2/n. */
+    {
+        bool dbl[DIS_COUNT];
+        int  k = 0;
+
+        for (i = 0; i < DIS_COUNT; i++) {
+            dbl[i] = false;
+        }
+        if (effect_modifier(g, EFF_FLOOD_RISK, -1, -1) > 0) {
+            dbl[DIS_FLOOD] = true;
+            k++;
+        }
+        if (effect_modifier(g, EFF_RIOT_RISK, -1, -1) > 0) {
+            dbl[DIS_RIOT] = true;
+            k++;
+        }
+        for (i = 0; i < DIS_COUNT; i++) {
+            weight[i] = (k > 0 && DIS_COUNT > 2 * k)
+                        ? (dbl[i] ? 2 * (DIS_COUNT - k) : DIS_COUNT - 2 * k)
+                        : 1;
+        }
     }
-    weight[DIS_FLOOD] += effect_modifier(g, EFF_FLOOD_RISK, -1, -1);
-    weight[DIS_RIOT]  += effect_modifier(g, EFF_RIOT_RISK, -1, -1);
 
     for (i = 0; i < DIS_COUNT; i++) {
         if (weight[i] < 0) {
