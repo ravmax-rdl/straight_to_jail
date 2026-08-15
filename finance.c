@@ -508,9 +508,12 @@ void grant_loan(GameState *g, int p, int amount)
     rate = current_loan_rate(g, p);
 
     printf("%s obtained a secured loan.\n", pl->name);
+    printf("\n");
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, amount));
+    printf("\n");
     printf("Collateral :\n");
     pledge_collateral(g, p, amount);
+    printf("\n");
     printf("Interest Rate : %d%%\n", rate);
     printf("Duration : %d Rounds\n", LOAN_ROUNDS);
 
@@ -546,9 +549,12 @@ void increase_loan(GameState *g, int p, int extra)
     rate = current_loan_rate(g, p);
 
     printf("%s increased the loan amount.\n", pl->name);
+    printf("\n");
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, extra));
+    printf("\n");
     printf("Collateral :\n");
     pledge_collateral(g, p, extra);
+    printf("\n");
     printf("Interest Rate : %d%%\n", rate);
     printf("Duration : %d Rounds\n", pl->loan.termLaps);
 
@@ -608,6 +614,7 @@ void repay_loan(GameState *g, int p, int amount)
 
     pl->loan.principal -= amount;
     printf("%s repaid LKR %s.\n", pl->name, fmt_lkr(b, amount));
+    printf("\n");
 
     if (pl->loan.principal <= 0) {
         pl->loan.active = false;
@@ -666,6 +673,7 @@ void sell_property(GameState *g, int p, int sq)
     credit(g, p, proceeds);
 
     printf("%s sold %s to the Bank.\n", g->players[p].name, s->name);
+    printf("\n");
     printf("Sale Price : LKR %s.\n", fmt_lkr(b, proceeds));
     printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
 }
@@ -705,6 +713,7 @@ void redeem_mortgage(GameState *g, int p, int sq)
     s->mortgaged = false;
 
     printf("%s redeemed %s.\n", g->players[p].name, s->name);
+    printf("\n");
     printf("Redemption Cost : LKR %s.\n", fmt_lkr(b, due));
     printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
 }
@@ -833,7 +842,9 @@ void check_loan_default(GameState *g)
         }
 
         printf("%s has defaulted.\n", pl->name);
+        printf("\n");
         printf("Collateral has been foreclosed.\n");
+        printf("\n");
         printf("Outstanding debt cleared.\n");
 
         for (sq = 0; sq < NUM_SQUARES; sq++) {
@@ -920,7 +931,9 @@ void buy_policy(GameState *g, int p, int sq, InsuranceType tier)
     s->policyWarned = false;
 
     printf("%s Insurance purchased.\n", TIER_NAMES[tier]);
+    printf("\n");
     printf("Property : %s\n", s->name);
+    printf("\n");
     printf("Premium : LKR %s.\n", fmt_lkr(b, due));
 }
 

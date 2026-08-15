@@ -107,8 +107,10 @@
  *                     purchases -- how a square arrives is irrelevant.
  *                     Holding more than three makes construction
  *                     compulsory, overriding personality        [LK 24]
- * D26 Output spacing  blocks are emitted compact. The gaps in the PDF are
- *                     LaTeX spacing between verbatim chunks, not content
+ * D26 Output spacing  CORRECTED, per block. Six section 5 blocks carry real
+ *                     blank lines between categories -- rent, construction,
+ *                     loan, repayment, default, insurance. The rest are
+ *                     compact, the round summary included         [sec. 5]
  * ------------------------------------------------------------------------ */
 
 #include <stdbool.h>

@@ -174,8 +174,9 @@ void determine_order(GameState *g)
 /* Rule-line widths, measured from the section 5 templates rather than
    guessed: the round summary uses 45 characters and the market conditions
    block uses 41. Extracting the PDF's text confirmed both, and confirmed
-   that the round summary's field lines are consecutive -- the vertical gaps
-   in the rendered PDF are LaTeX spacing, not content. That is D26. */
+   that the round summary's field lines are consecutive. D26 keeps the
+   summary compact for that reason, while six other blocks do carry real
+   blank lines between their categories -- see D26 for which. */
 #define SUMMARY_RULE 45
 #define MARKET_RULE  41
 
@@ -503,12 +504,14 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     }
 
     printf("%s landed on %s.\n", g->players[p].name, s->name);
+    printf("\n");
 
     /* No else branch. charge now runs the D11 ladder and prints Rule 14's
        bankruptcy block if the ladder cannot save the payer, by which point
        the creditor has already received whatever was left. */
     if (charge(g, p, rent, s->owner)) {
         printf("Rent Paid : LKR %s.\n", fmt_lkr(b, rent));
+        printf("\n");
         printf("Owner : %s.\n", g->players[s->owner].name);
     }
 }
@@ -769,6 +772,7 @@ static void build_step(GameState *g, int p)
         } else {
             s->houses++;
             printf("%s constructed one house on %s.\n", g->players[p].name, s->name);
+            printf("\n");
             printf("Construction Cost : LKR %s.\n", fmt_lkr(b, cost));
         }
 
@@ -830,6 +834,7 @@ static void maintenance_step(GameState *g, int p)
         s->conditionPct       = 100;
         s->unmaintainedRounds = 0;    /* LK 28's clock restarts             */
         printf("%s maintained %s.\n", g->players[p].name, s->name);
+        printf("\n");
         printf("Maintenance Cost : LKR %s.\n", fmt_lkr(b, cost));
     }
 }
