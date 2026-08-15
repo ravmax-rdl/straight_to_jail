@@ -206,14 +206,36 @@ static int count_hotels(const GameState *g, int p)
 
 /* Milestone 2 swaps the stored price for square_value once the choke point
    exists; until then nothing is owned and both read zero. */
+/* The GAME OVER block's Total Property Value: everything the player holds on
+ * the board, priced exactly as net_worth prices it.
+ *
+ * It read the stored price before, which ignored depreciation, structural
+ * damage, every market effect and the buildings entirely -- so the block
+ * printed two figures on two different bases and the reader could not
+ * reconcile Cash + Property against Net Worth. Rule 15 lists Property,
+ * Building, Railway and Utility Value as separate terms and the block gives
+ * them one line, so the line carries all four, each through the choke point
+ * that owns it.
+ */
 static int total_property_value(const GameState *g, int p)
 {
     int i, total = 0;
+
     for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].owner == p) {
-            total += g->board[i].price;
+        const Square *s = &g->board[i];
+
+        if (s->owner != p) {
+            continue;
+        }
+        total += square_value(g, i);
+
+        if (s->hotel) {
+            total += building_cost(g, i, true);
+        } else if (s->houses > 0) {
+            total += building_cost(g, i, false) * s->houses;
         }
     }
+
     return total;
 }
 
@@ -771,7 +793,7 @@ static void liquidate_step(GameState *g, int p)
     int sq = decide_liquidate(g, p);
 
     if (sq >= 0) {
-        sell_one_building(g, p, sq);
+        sell_property(g, p, sq);
     }
 }
 

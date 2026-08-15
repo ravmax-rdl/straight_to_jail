@@ -491,8 +491,21 @@ void increase_loan(GameState *g, int p, int extra)
     printf("Interest Rate : %d%%\n", rate);
     printf("Duration : %d Rounds\n", pl->loan.termRounds);
 
-    pl->loan.principal += extra;
-    pl->loan.ratePct    = rate;
+    /* Saturating add, for the reason D29 gives. money_round keeps the
+       compounding in accrue_interest inside int's range by clamping at
+       INT_MAX, but a top-up adds to that clamped figure directly, and
+       INT_MAX + extra is signed overflow -- undefined behaviour, not merely
+       a wrong number. Seed 51 reached it: the Risk Taker refinances at every
+       opportunity under R4.3, and once its balance had saturated the next
+       increase wrapped the principal to INT_MIN, which the DEBUG guard in
+       accrue_interest caught. */
+    if (pl->loan.principal > INT_MAX - extra) {
+        pl->loan.principal = INT_MAX;
+    } else {
+        pl->loan.principal += extra;
+    }
+
+    pl->loan.ratePct = rate;
     credit(g, p, extra);
 }
 
@@ -542,6 +555,58 @@ void repay_loan(GameState *g, int p, int amount)
 
     printf("Outstanding Balance :\n");
     printf("LKR %s.\n", fmt_lkr(b, pl->loan.principal));
+}
+
+/* Forward declarations for the two disposal helpers defined further down:
+   reset_to_bank with the loan section, since foreclosure was its first
+   caller, and sell_one_building with the D11 ladder. D32's voluntary sale
+   reuses both rather than restating what either does. */
+static void reset_to_bank(Square *s);
+static void sell_one_building(GameState *g, int p, int sq);
+
+/* D32: sell a property outright to the Bank.
+ *
+ * Section 3 requires this of two personalities in so many words -- the Risk
+ * Taker "sells lower-value properties to finance premium developments", the
+ * Opportunistic Trader "sells properties expected to decrease in value" --
+ * and forbids it of a third, which only means anything if the act exists.
+ * The spec names no price for it.
+ *
+ * The price is the current square_value: the Bank buys back at what it sells
+ * for. That symmetry is the whole argument, and the alternative fails on its
+ * own terms -- paying mortgage_value would make selling strictly worse than
+ * mortgaging, which yields the same cash and keeps the property, so no
+ * rational player would ever sell and all three bullets would be dead
+ * letters. At market value a sale is a real choice: it realises no profit on
+ * its own, but it moves capital out of an asset the market is about to mark
+ * down, which is exactly what section 3.4 describes.
+ *
+ * Buildings come down first at D11's 50%, the price the ladder already uses.
+ * LK 3 bars a loan-locked square from being sold at all. A mortgaged square
+ * is refused too, rather than netted off: the player has already drawn cash
+ * against it and D31 gives them a way to settle that first.
+ */
+void sell_property(GameState *g, int p, int sq)
+{
+    char    b[FMT_BUF];
+    Square *s = &g->board[sq];
+    int     proceeds;
+
+    if (s->owner != p || s->loanLocked || s->mortgaged) {
+        return;
+    }
+
+    while (development_level(g, sq) > 0) {
+        sell_one_building(g, p, sq);
+    }
+
+    proceeds = square_value(g, sq);
+    reset_to_bank(s);
+    credit(g, p, proceeds);
+
+    printf("%s sold %s to the Bank.\n", g->players[p].name, s->name);
+    printf("Sale Price : LKR %s.\n", fmt_lkr(b, proceeds));
+    printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
 }
 
 /* D31: lift a mortgage by repaying it, at the Bank square.
@@ -849,7 +914,7 @@ static int demolition_refund(const GameState *g, int sq)
  * returns half of each. Dropping straight to zero would refund half a hotel
  * for buildings worth a hotel plus four houses.
  */
-void sell_one_building(GameState *g, int p, int sq)
+static void sell_one_building(GameState *g, int p, int sq)
 {
     char    b[FMT_BUF];
     Square *s      = &g->board[sq];

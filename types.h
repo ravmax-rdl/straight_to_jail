@@ -67,6 +67,9 @@
  * D19 One clock       everything counts game rounds. A loan matures at
  *                     issuedRound + 20; property age is
  *                     round - purchasedRound and starts at purchase
+ * D32 Selling        section 3 requires it and names no price: sold to the
+ *                     Bank at current square_value, buildings down first
+ *                     at D11's 50%. Never breaks a developed group [sec. 3]
  * D31 Redemption      a mortgage is lifted by repaying the CURRENT mortgage
  *                     value at the Bank square, one action per landing like
  *                     LK 5's five. Rent and development resume; no interest
@@ -373,10 +376,10 @@ const char *insurance_name(InsuranceType tier);
 bool raise_funds(GameState *g, int p, int needed);
 void declare_bankrupt(GameState *g, int p, int creditor);
 
-/* finance.c -- one level of development sold back at D11's 50%. Used by the
-   recovery ladder and, deliberately, by the two section 3 personalities that
-   sell to reposition (R4.3, R4.4). */
-void sell_one_building(GameState *g, int p, int sq);
+/* finance.c -- D32's voluntary sale. Section 3 requires it of two
+   personalities in so many words and forbids it of a third; the price is the
+   current square_value, buildings coming down first at D11's 50%. */
+void sell_property(GameState *g, int p, int sq);
 
 /* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
    assets), so deliberately two functions rather than one parameterised. */

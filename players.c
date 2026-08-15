@@ -461,23 +461,6 @@ static bool is_group_minimum(const GameState *g, int sq)
     return true;
 }
 
-/* The mirror of is_group_minimum, for selling. Buildings must come down from
-   the top of a group for the same reason they go up from the bottom: Rule 9's
-   evenness is a property of the group, not of the direction of travel. */
-static bool is_group_maximum(const GameState *g, int sq)
-{
-    PropertyGroup grp   = g->board[sq].group;
-    int           level = development_level(g, sq);
-    int           i;
-
-    for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].group == grp && development_level(g, i) > level) {
-            return false;
-        }
-    }
-    return true;
-}
-
 /* Given two legal candidates, does this personality prefer the newer one?
  *
  * Rule 9 fixes which square within a group may be built on; it says nothing
@@ -915,47 +898,65 @@ BankAction decide_bank(GameState *g, int p, int *amount, int *square)
 
 /* ---------------------------------------------------------- liquidation -- */
 
-/* Rule 3 step 7: which square to sell one level of development from, or -1
- * to sell nothing.
+/* Rule 3 step 7: which PROPERTY to sell outright, or -1 to sell nothing.
  *
- * Two section 3 bullets describe selling as a deliberate repositioning rather
- * than a forced one -- the Risk Taker's "sells cheap assets to fund premium
- * ones" and the Opportunistic Trader's "sells ahead of declines". Both are
- * priced at D11's 50% of construction cost, which is the only figure the spec
- * states for disposing of anything; a voluntary sale that invented its own
- * price would be a new rule rather than an implementation of an old one.
+ * Section 3 says properties, not buildings. Three of the four personalities
+ * are given a position on it -- section 3.1 never sells one, section 3.3
+ * "sells lower-value properties to finance premium developments", section 3.4
+ * "sells properties expected to decrease in value following economic events"
+ * -- and D32 prices the act at market value.
  *
- * Buildings come down from the top of a group for the same reason they go up
- * from the bottom: Rule 9's evenness does not care which way the traffic is
- * moving, and game.c's DEBUG guard would catch a group left two levels apart
- * the next time anyone built on it.
+ * An earlier version sold one level of development instead. That was a
+ * misreading, and an expensive one: buildings come back at half what they
+ * cost, so selling and rebuilding destroyed value on every cycle and the
+ * board churned at roughly one demolition per construction.
  */
+
+/* Never sell out from under a monopoly. Breaking a group to raise cash
+   forfeits Rule 8, which is the only thing that makes the rest of the group
+   worth holding -- so whatever the strategy, the group being developed is
+   not the place to find money. */
+static bool sellable(const GameState *g, int p, int sq)
+{
+    const Square *s = &g->board[sq];
+
+    if (s->owner != p || !is_purchasable(g, sq)) {
+        return false;
+    }
+    if (s->loanLocked || s->mortgaged) {
+        return false;                            /* LK 3; D31 comes first   */
+    }
+    return !group_developable(g, p, s->group);
+}
+
 int decide_liquidate(GameState *g, int p)
 {
     int i, best = -1, bestValue = 0;
 
     switch (g->players[p].strat) {
     case STRAT_AGGRESSIVE:
+        /* 3.1: "never voluntarily sells a property unless bankruptcy is
+           unavoidable". The unavoidable case is not this decision -- it is
+           the D11 ladder, which sells and mortgages without asking. */
+        return -1;
+
     case STRAT_CONSERVATIVE:
-        /* R4.1: never sells voluntarily. R4.2 has no selling bullet at all,
-           and a personality defined by its reserve has no reason to raise
-           cash at half price. */
+        /* 3.2 gives this player no selling behaviour at all, and one whose
+           defining trait is the largest cash reserve has no reason to
+           liquidate at market value to raise more. */
         return -1;
 
     case STRAT_RISKTAKER:
-        /* R4.3: sells cheap assets to fund premium ones -- so it only sells
-           when there is something premium waiting, and it takes the cheapest
-           developed square it holds. */
+        /* 3.3: "sells lower-value properties to finance premium
+           developments" -- so only when a premium development is actually
+           waiting, and the cheapest holding goes first. */
         if (development_shortfall(g, p) <= g->players[p].cash) {
             return -1;
         }
         for (i = 0; i < NUM_SQUARES; i++) {
             int value;
 
-            if (g->board[i].owner != p || development_level(g, i) == 0) {
-                continue;
-            }
-            if (!is_group_maximum(g, i)) {
+            if (!sellable(g, p, i)) {
                 continue;
             }
             value = square_value(g, i);
@@ -967,22 +968,27 @@ int decide_liquidate(GameState *g, int p)
         return best;
 
     case STRAT_OPPORTUNIST:
-        /* R4.4: sells ahead of declines. A negative VALUE_MUL reaching the
-           square is the market saying so, and LK 31-32 give a decline ten
-           rounds to run -- long enough that standing buildings on it are
-           earning less than their sale price would. */
+        /* 3.4: "sells properties expected to decrease in value following
+           economic events". A negative VALUE_MUL reaching the square is the
+           economic event saying so, and LK 31-32 give a decline ten rounds
+           to run -- long enough that the cash is better held elsewhere. The
+           worst-hit square goes first. */
         for (i = 0; i < NUM_SQUARES; i++) {
-            if (g->board[i].owner != p || development_level(g, i) == 0) {
+            int drop;
+
+            if (!sellable(g, p, i)) {
                 continue;
             }
-            if (effect_modifier(g, EFF_VALUE_MUL, i, p) >= 0) {
+            drop = effect_modifier(g, EFF_VALUE_MUL, i, p);
+            if (drop >= 0) {
                 continue;
             }
-            if (is_group_maximum(g, i)) {
-                return i;
+            if (best < 0 || drop < bestValue) {
+                best      = i;
+                bestValue = drop;
             }
         }
-        return -1;
+        return best;
     }
 
     return -1;
