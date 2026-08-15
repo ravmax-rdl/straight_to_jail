@@ -166,11 +166,11 @@ typedef struct {                     /* a single timed modifier — see §5     
 
 typedef struct {
     int  inflationPct;               /* most recent draw, for the LK 36 block           */
-    int  interestRatePct;            /* current rate for NEW loans only (D21)           */
     int  incomeTaxPct;               /* seeded at 15, inflation-adjusted (D2')          */
     int  groupCooldown[GRP_COUNT];   /* LK 33: 30-round bar on re-selection             */
     int  lastBoomGroup, lastDeclineGroup;
     int  activeRegulation;           /* -1 = none                                       */
+    int  activeEvent, activeEventRound; /* LK 18 row in force; Table 9 keys on it (D21) */
     Effect effects[MAX_EFFECTS];
     int    effectCount;
 } Economy;

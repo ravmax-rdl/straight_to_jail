@@ -308,11 +308,17 @@ In code:
 loan->principal += pct_of(loan->principal, loan->ratePct);
 ```
 
-Note `loan->ratePct`, not `econ.interestRatePct`. Rule-LK 13 freezes a loan's rate at issue. The
-global rate moves with inflation and affects only *new* loans. Storing the rate on the loan makes
-this correct by construction; reading the global rate at accrual time would silently reprice every
-outstanding loan on every inflation draw, which is the single most commonly mis-implemented rule
-in this specification.
+Note `loan->ratePct`, not a fresh Table 9 reading. Rule-LK 13 freezes a loan's rate at issue, so
+the table governs *new* loans only. Storing the rate on the loan makes this correct by
+construction; looking the condition up again at accrual time would silently reprice every
+outstanding loan the moment the economy moved, which is the single most commonly mis-implemented
+rule in this specification.
+
+The one exception is deliberate and is **D21**'s: Economic Recession and Stock Market Boom leave
+the issued rate alone but scale what a live loan compounds at while they last, so the accrual
+reads `apply_pct(loan->ratePct, EFF_INTEREST_MUL)` rather than `ratePct` bare. Every row of the
+table above is now a rate a loan can actually be written at — before **D21** was revised, only
+the 8% seed was, and the other four rows were unused.
 
 ## What the rates actually do
 

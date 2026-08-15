@@ -609,7 +609,7 @@ a short but critical list:
 | `board[i].conditionPct` | `100` | buildings start in perfect condition (LK 25) |
 | `board[i].policy` | `INS_NONE` | happens to be 0, but say it anyway |
 | `players[i].cash` | `30000` | Rule 1 |
-| `econ.interestRatePct` | `8` | Table 9, Stable Economy |
+| `econ.activeEvent` | `-1` | zero means "Tourism Boom is running" |
 | `round` | `1` | rounds are 1-based; `round % 10` depends on it |
 
 The `owner` one is the trap. Forget it and every property starts owned by the Aggressive
