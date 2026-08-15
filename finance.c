@@ -532,7 +532,7 @@ void grant_loan(GameState *g, int p, int amount)
     pledge_collateral(g, p, amount);
     printf("\n");
     printf("Interest Rate : %d%%\n", rate);
-    printf("Duration : %d Rounds\n", LOAN_ROUNDS);
+    printf("Duration : %d Rounds\n", pl->loan.termLaps);
     end_block();
 
     pl->loan.active      = true;
@@ -575,6 +575,7 @@ void increase_loan(GameState *g, int p, int extra)
     printf("\n");
     printf("Interest Rate : %d%%\n", rate);
     printf("Duration : %d Rounds\n", pl->loan.termLaps);
+    end_block();
 
     /* Saturating add, for the reason D29 gives. money_round keeps the
        compounding in accrue_interest inside int's range by clamping at
@@ -606,6 +607,7 @@ void extend_loan(GameState *g, int p)
     pl->loan.termLaps += LOAN_ROUNDS;
     printf("%s extended the loan period.\n", pl->name);
     printf("Duration : %d Rounds\n", pl->loan.termLaps);
+    end_block();
 }
 
 /* LK 5's two repayment actions, part and full, which differ only in amount.
@@ -880,6 +882,7 @@ void check_loan_default(GameState *g)
         printf("Collateral has been foreclosed.\n");
         printf("\n");
         printf("Outstanding debt cleared.\n");
+        end_block();
 
         for (sq = 0; sq < NUM_SQUARES; sq++) {
             if (g->board[sq].owner == i && g->board[sq].loanLocked) {
@@ -998,8 +1001,12 @@ void tick_insurance(GameState *g)
 
         if (left <= INS_WARN_ROUNDS && left > 0 && !s->policyWarned) {
             s->policyWarned = true;
+            /* left, not INS_WARN_ROUNDS: the guard admits 3, 2 or 1, and
+               a player who laps twice in a round skips a value. Printing
+               the threshold told 2 of 53 warnings that three rounds
+               remained when one or two did. */
             printf("Insurance policy on %s expires in %d rounds.\n",
-                   s->name, INS_WARN_ROUNDS);
+                   s->name, left);
             end_block();
         }
         if (left <= 0) {

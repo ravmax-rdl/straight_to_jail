@@ -810,6 +810,7 @@ void condition_tick(GameState *g)
         if (s->unmaintainedRounds > UNMAINTAINED_LIMIT && !s->structDamaged) {
             s->structDamaged = true;
             printf("Structural damage has occurred at %s.\n", s->name);
+            end_block();
         }
     }
 }
