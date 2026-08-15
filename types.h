@@ -91,8 +91,11 @@
  *                     player, then clockwise. The decliner may bid
  * D24 Luxury tax      charged once when the regulation activates, at 25%
  *                     of each hotel property's value including buildings
- * D25 Anti-Spec. Act  the <=3 undeveloped cap alone; enforcing it strictly
- *                     makes LK 24's five-round clause unreachable
+ * D25 Anti-Spec. Act  REVISED. The cap counts OWNED undeveloped COLOUR
+ *                     properties, so it gates auctions as well as direct
+ *                     purchases -- how a square arrives is irrelevant.
+ *                     Holding more than three makes construction
+ *                     compulsory, overriding personality        [LK 24]
  * D26 Output spacing  blocks are emitted compact. The gaps in the PDF are
  *                     LaTeX spacing between verbatim chunks, not content
  * ------------------------------------------------------------------------ */

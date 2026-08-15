@@ -540,19 +540,23 @@ bool group_monopoly(const GameState *g, int p, PropertyGroup grp)
     return members > 0;
 }
 
-/* How many purchasable squares p holds that carry no buildings.
+/* How many COLOUR properties p holds that carry no buildings.
  *
- * The Anti-Speculation Act's base (LK 24, D25). Railways and utilities count:
- * neither can ever be developed, so both are permanently undeveloped holdings
- * and the rule is aimed at exactly that -- accumulating board without
- * improving it.
+ * The Anti-Speculation Act's base (LK 24, D25). Railways and utilities are
+ * excluded, and that exclusion is what makes the rule satisfiable: LK 24
+ * requires anything held above the cap to be developed within five rounds,
+ * and neither a station nor a utility can ever be developed at all. Counting
+ * them would put a player holding four railways in permanent breach of an
+ * obligation they have no legal way to discharge. The spec's own structure
+ * agrees -- section 1.1.1 calls the twenty-two colour squares "properties",
+ * with stations and utilities described separately in 1.1.2 and 1.1.3.
  */
 int count_undeveloped(const GameState *g, int p)
 {
     int i, n = 0;
 
     for (i = 0; i < NUM_SQUARES; i++) {
-        if (g->board[i].owner == p && is_purchasable(g, i)
+        if (g->board[i].type == SQ_PROPERTY && g->board[i].owner == p
             && development_level(g, i) == 0) {
             n++;
         }

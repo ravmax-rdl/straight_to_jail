@@ -98,6 +98,21 @@ static bool purchase_permitted(const GameState *g, int p, int sq)
     return !(cap > 0 && count_undeveloped(g, p) >= cap);
 }
 
+/* Is p holding more undeveloped colour property than LK 24 allows?
+ *
+ * The condition that "invokes the immediate development": above the cap,
+ * building stops being a preference and becomes an obligation, so every
+ * personality builds while it lasts -- including the Opportunistic Trader,
+ * which would otherwise wait out an inflationary round, and the Conservative
+ * Banker, which would otherwise refuse a hotel while indebted.
+ */
+static bool over_speculation_cap(const GameState *g, int p)
+{
+    int cap = effect_modifier(g, EFF_MAX_PROPERTIES, -1, p);
+
+    return cap > 0 && count_undeveloped(g, p) > cap;
+}
+
 /* Would owning this square complete a colour group for p? R4.1 has the
    Aggressive Investor complete groups first, and a group is the only thing
    that unlocks Rule 8, so this is worth paying over the odds for. */
@@ -386,8 +401,16 @@ static int bid_ceiling(GameState *g, int p, int sq)
 
 int decide_bid(GameState *g, int p, int sq, int minBid)
 {
-    int ceiling = bid_ceiling(g, p, sq);
+    int ceiling;
 
+    /* LK 24 governs how much a player OWNS, not how they came to own it, so
+       the Anti-Speculation cap gates the auction exactly as it gates the
+       purchase. Bidding here was the way round it. */
+    if (!purchase_permitted(g, p, sq)) {
+        return 0;
+    }
+
+    ceiling = bid_ceiling(g, p, sq);
     if (minBid > g->players[p].cash || minBid > ceiling) {
         return 0;
     }
@@ -414,7 +437,14 @@ int decide_bid(GameState *g, int p, int sq, int minBid)
  */
 static bool wants_to_build(GameState *g, int p, int sq, bool hotel)
 {
-    (void)sq;
+    /* LK 24, and the one place a regulation outranks a personality. Above the
+       Anti-Speculation cap the act requires immediate development, so every
+       preference below is suspended until the holding is back within it --
+       including R4.2's refusal to build hotels while indebted, since the
+       regulation is the more specific instruction. */
+    if (over_speculation_cap(g, p)) {
+        return true;
+    }
 
     if (hotel && !profile(g, p)->hotelsWhileIndebted && g->players[p].loan.active) {
         return false;                            /* R4.2                    */
