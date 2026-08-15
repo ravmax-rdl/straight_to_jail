@@ -915,6 +915,13 @@ void move_player(GameState *g, int p, int steps)
     pl->pos = to;
 
     if (to < from || to == SQ_IDX_GO) {
+        /* D30: this is also the round boundary. A round ends when every
+           solvent player has done this once, so the flag is raised here --
+           the same wrap test that pays Rule 4's salary is the one that says
+           a lap is complete, and there is no second definition to keep in
+           step with it. */
+        pl->passedGo = true;
+
         pl->cash += GO_SALARY;
         printf("%s passed GO.\n", pl->name);
         printf("Collected LKR %s.\n", fmt_lkr(b, GO_SALARY));

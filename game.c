@@ -847,17 +847,73 @@ void play_turn(GameState *g, int p)
    which is the clarification's definition, and the reason D19 needs only a
    single clock: a player's own round count and the game's advance together,
    diverging only when the player leaves the game entirely. */
+/* D30: has every solvent player completed a lap since the round began?
+ *
+ * Bankrupt players are not waited for. Rule 15 has already removed them from
+ * the game, and a round that waited on someone who will never move again
+ * would never end.
+ */
+static bool round_complete(const GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        if (!g->players[i].bankrupt && !g->players[i].passedGo) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* D30. A round is one LAP of the board, not one turn each: it runs until
+ * every solvent player has passed GO.
+ *
+ * Turn order is unaffected -- everyone keeps taking a turn per cycle in
+ * order[] sequence, including players who have already lapped. Stopping a
+ * player once they had passed GO would hand the slowest player the most
+ * turns, which is neither in Rule 3 nor in anyone's interest to model.
+ *
+ * Termination rests on Rule 13 and D10 rather than on luck. The only state
+ * that stops a player moving is Jail, and D10 releases them after the third
+ * failed attempt; every other turn advances them 2 to 12 squares round a
+ * 40-square board. A lap therefore takes about six turns and cannot take
+ * unboundedly many, which the DEBUG guard below asserts rather than assumes.
+ */
 void play_round(GameState *g)
 {
     int i;
+#ifdef DEBUG
+    int cycles = 0;
+#endif
 
     g->round++;
 
     for (i = 0; i < NUM_PLAYERS; i++) {
-        int p = g->order[i];
-        if (!g->players[p].bankrupt) {
-            play_turn(g, p);
+        g->players[i].passedGo = false;
+    }
+
+    while (!round_complete(g)) {
+        for (i = 0; i < NUM_PLAYERS; i++) {
+            int p = g->order[i];
+            if (!g->players[p].bankrupt) {
+                play_turn(g, p);
+            }
         }
+
+        /* Rule 15's first ending, taken as soon as it happens rather than
+           at the next round boundary: with one player left there is nobody
+           to finish the lap against. */
+        if (game_over(g)) {
+            break;
+        }
+
+#ifdef DEBUG
+        if (++cycles > 500) {
+            fprintf(stderr, "R%d: round did not complete in %d cycles (D30)\n",
+                    g->round, cycles);
+            abort();
+        }
+#endif
     }
 
     /* D13 puts these last and in this order. The economic cadences slot in

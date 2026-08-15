@@ -67,6 +67,11 @@
  * D19 One clock       everything counts game rounds. A loan matures at
  *                     issuedRound + 20; property age is
  *                     round - purchasedRound and starts at purchase
+ * D30 A round         SUPERSEDES the earlier reading. A round is one LAP of
+ *                     the board: it ends when every solvent player has
+ *                     passed GO since it began, not after one turn each.
+ *                     Players keep taking turns in order[] throughout, so a
+ *                     round is several turns each             [Rule 15, LK]
  * D20 Single claim    a payout consumes the policy, whatever rounds remain
  * D21 Interest rate   seeds at Table 9 Stable 8%. Inflation applies LK 14
  *                     multiplicatively. Large event shifts are relative
@@ -267,6 +272,7 @@ typedef struct {
     Strategy    strat;
     int  cash, pos, jailTurns, taxesDue;
     bool bankrupt, jailed;
+    bool passedGo;                /* D30: lapped since the round began       */
     bool sufferedLoss;            /* gates the Risk Taker's insurance, 3.3   */
     Loan loan;
 } Player;

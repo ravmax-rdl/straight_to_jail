@@ -112,6 +112,11 @@ a silent run is the result you want.
 banking and failure, the living economy, insurance and ageing, and the four §3 personalities,
 followed by a line-by-line audit of every §5 output template.
 
+A **round** is one lap of the board — it ends when every solvent player has passed GO, not
+after one turn each (decision **D30**), so a round spans roughly six turns per player. Every
+timed system is measured in rounds: inflation every 10, events every 15, regulations every 20,
+loan terms and policy life 20, depreciation from age 50.
+
 Two known limitations, both documented rather than hidden:
 
 - **A mortgage cannot be lifted.** The spec defines mortgaging as a debt-recovery step (**D11**)
@@ -125,7 +130,7 @@ Two known limitations, both documented rather than hidden:
 
 | Document | What it is |
 |----------|------------|
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D29** — including the three where the lecturer's clarifications override the PDF |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D30** — including the three where the lecturer's clarifications override the PDF |
 | [`docs/superpowers/specs/straight-to-jail-architecture-design.md`](docs/superpowers/specs/straight-to-jail-architecture-design.md) | Architecture rationale — the `Rent.csv` loader, the effect registry, the choke points, the round scheduler |
 | [`docs/superpowers/plans/straight-to-jail-staged.md`](docs/superpowers/plans/straight-to-jail-staged.md) | The implementation plan — six milestones, every step compiling clean and running |
 | [`docs/reference/`](docs/reference/) | Three reference notes — the C, the data structures, the economic mathematics |
