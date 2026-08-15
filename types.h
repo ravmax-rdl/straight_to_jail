@@ -27,8 +27,11 @@
  *                     uncovered below Business Interruption. App E's
  *                     "Earthquake" never occurs             [LK 10, App E]
  * D4  Interest        The Table 9 rate applies EVERY ROUND; the "annual"
- *                     label is ignored as inconsistent with LK 4. The
- *                     issued rate is frozen for the loan's life  [LK 4, 13]
+ *                     label is ignored as inconsistent with LK 4. A loan is
+ *                     a single-player instrument, so the round is the
+ *                     BORROWER's lap (D34) -- a 20-lap term therefore
+ *                     compounds exactly 20 times. The issued rate is frozen
+ *                     for the loan's life                       [LK 4, 13]
  * D5  Max loan        75% of the mortgage value of properties + railways +
  *                     utilities (LK 2 beats the narrower 1.1.4)      [LK 2]
  * D6' Rounding        SUPERSEDES the PDF. Money is STORED as int; ratio

@@ -719,7 +719,7 @@ void redeem_mortgage(GameState *g, int p, int sq)
  */
 void accrue_interest(GameState *g)
 {
-    int i;
+    int i, laps;
 
     for (i = 0; i < NUM_PLAYERS; i++) {
         Player *pl = &g->players[i];
@@ -727,7 +727,23 @@ void accrue_interest(GameState *g)
         if (pl->bankrupt || !pl->loan.active) {
             continue;
         }
-        pl->loan.principal = apply_pct(pl->loan.principal, pl->loan.ratePct);
+
+        /* D34: a loan is a single-player instrument, so it compounds on the
+           borrower's clock -- once per lap they completed this round, not
+           once per game round. That is what makes the instrument coherent:
+           its term is twenty of the borrower's laps under D34, so it now
+           accrues exactly twenty times over that term however fast or slow
+           they move round the board. Compounding per game round while the
+           term counted laps meant a quick player paid fewer periods than a
+           slow one for the same twenty-lap loan.
+
+           Applied once per lap rather than as one compound step, so D6's
+           rounding still happens at each period exactly as LK 4 describes,
+           and a player who laps twice is charged twice rather than being
+           charged once at a rate raised to a power. */
+        for (laps = pl->laps - pl->lapsPrev; laps > 0; laps--) {
+            pl->loan.principal = apply_pct(pl->loan.principal, pl->loan.ratePct);
+        }
 
 #ifdef DEBUG
         /* Milestone 3 asserted a ceiling here on the reasoning that real
