@@ -46,8 +46,11 @@
  * D8' Tie-break       Only tied players reroll, and the reroll permutes
  *                     only their own positions                      [Rule 2]
  * D9  Valuation proxy "estimated market value" = square_value()    [sec. 3]
- * D10 Jail            After the 3rd failed turn bail is auto-paid; doubles
- *                     have no effect outside jail                  [Rule 13]
+ * D10 Jail            REVISED. Rule 13's three routes are a CHOICE, made
+ *                     in players.c: doubles are free, bail is paid from
+ *                     cash only, and the third turn releases WITHOUT a
+ *                     charge -- serving the time is itself an exit. Doubles
+ *                     have no effect outside jail                [Rule 13]
  * D11 Debt recovery   sell buildings @50% -> mortgage free assets ->
  *                     bankrupt, assets auctioned. Repaying a loan is NOT
  *                     a rung: that needs the Bank square      [Rule 11, 14]
@@ -552,6 +555,7 @@ int  decide_maintenance(GameState *g, int p);
 int  decide_insurance(GameState *g, int p, InsuranceType *tier);
 bool decide_renovate(GameState *g, int p, int sq);
 int  decide_liquidate(GameState *g, int p);
+bool decide_bail(GameState *g, int p);
 
 /* decide_bank returns the one Bank action to take on this landing (R1.8),
    writing the sum involved to *amount for the three that need one and the

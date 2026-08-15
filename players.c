@@ -46,6 +46,7 @@ typedef struct {
     int  bidCapPct;          /* R4.*: ceiling as % of value, or BID_UNCAPPED */
     int  maintainBelowPct;   /* R4.*: condition band that triggers upkeep   */
     int  renovateAbovePct;   /* R4.*: depreciation that triggers renovation */
+    int  bailBelowPct;       /* Rule 13: bail paid when it costs no more    */
     bool hotelsWhileIndebted;/* R4.2: no hotels while a loan is outstanding */
     bool insureOnlyAfterLoss;/* R4.3: insures only after suffering one      */
     InsuranceType houseTier; /* R4.*: cover bought on a house property      */
@@ -68,10 +69,10 @@ typedef struct {
  */
 
 static const Profile PROFILE[] = {
-    /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
-    /* STRAT_CONSERVATIVE */ {  90, 90, 10, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
-    /* STRAT_RISKTAKER    */ { BID_UNCAPPED, 25, 30, true, true, INS_BASIC, INS_BUSINESS },
-    /* STRAT_OPPORTUNIST  */ { 100, 75, 15, true,  false, INS_NONE,  INS_COMPREHENSIVE }
+    /* STRAT_AGGRESSIVE   */ { 120, 75, 10, 100, true,  false, INS_BASIC, INS_COMPREHENSIVE },
+    /* STRAT_CONSERVATIVE */ {  90, 90, 10,   0, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
+    /* STRAT_RISKTAKER    */ { BID_UNCAPPED, 25, 30, 100, true, true, INS_BASIC, INS_BUSINESS },
+    /* STRAT_OPPORTUNIST  */ { 100, 75, 15,  10, true,  false, INS_NONE,  INS_COMPREHENSIVE }
 };
 
 static const Profile *profile(const GameState *g, int p)
@@ -983,6 +984,37 @@ static bool sellable(const GameState *g, int p, int sq)
         return false;                            /* LK 3; D31 comes first   */
     }
     return !group_developable(g, p, s->group);
+}
+
+/* Rule 13's choice: pay the LKR 300 or sit the turn out.
+ *
+ * Section 3 gives no personality any jail behaviour, so the column is read
+ * off what each one IS. 3.1 and 3.3 are both defined by needing to be on the
+ * board -- "rather than maintaining large cash reserves", "purchases every
+ * available property whenever legally possible" -- so they pay whenever they
+ * can. 3.2 waits, and waiting is not a gap in that strategy but the whole of
+ * it: "maintains the largest emergency cash reserve among all players" is the
+ * one bullet the personality is named for. 3.4 "always evaluates expected
+ * return before making any financial decision", so it pays only while the
+ * bail is small against what it holds.
+ *
+ * bailBelowPct needs no sentinel at either end, unlike BID_UNCAPPED: 0 makes
+ * the test unsatisfiable and 100 collapses it into the affordability check,
+ * so both read as the percentages they are.
+ */
+bool decide_bail(GameState *g, int p)
+{
+    const Player *pl = &g->players[p];
+
+    /* Never through the D11 ladder. Rule 13 gives release away for three
+       turns, so no player should sell a building or mortgage a property to
+       buy it -- cash is tested before the charge, exactly as it is for every
+       other voluntary payment (D31's redemption, LK 5's repayment). */
+    if (pl->cash < JAIL_BAIL) {
+        return false;
+    }
+
+    return JAIL_BAIL <= pct_of(pl->cash, profile(g, p)->bailBelowPct);
 }
 
 int decide_liquidate(GameState *g, int p)

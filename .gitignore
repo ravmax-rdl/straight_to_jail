@@ -12,3 +12,10 @@ run*.txt
 spec.txt
 debug
 debug.exe
+
+# stray build output
+dbg
+dbg.exe
+probe
+probe.exe
+NUL.exe

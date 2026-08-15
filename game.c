@@ -639,21 +639,30 @@ static bool resolve_jail(GameState *g, int p, int d1, int d2)
     }
 
     if (d1 == d2) {                             /* Rule 13: doubles       */
-        pl->jailed = false;
+        pl->jailed    = false;
+        pl->jailTurns = 0;
         printf("%s rolled doubles and left Jail.\n", pl->name);
         end_block();
         return true;
     }
 
-    if (charge(g, p, JAIL_BAIL, -1)) {          /* Rule 13: pay the bail  */
-        pl->jailed = false;
+    /* Rule 13's other two routes are a CHOICE, and it belongs to
+       players.c. Charging unconditionally made bail the only exit any
+       player ever took -- across 1324 jailings not one served the
+       wait -- and worse, charge runs the D11 ladder, so a player would
+       sell buildings and mortgage property to buy what three turns
+       give away. decide_bail tests cash before committing, so the
+       ladder is now unreachable from here. */
+    if (decide_bail(g, p) && charge(g, p, JAIL_BAIL, -1)) {
+        pl->jailed    = false;
+        pl->jailTurns = 0;
         printf("%s paid LKR %s bail.\n", pl->name, fmt_lkr(b, JAIL_BAIL));
         end_block();
         return true;
     }
 
     pl->jailTurns++;
-    if (pl->jailTurns >= JAIL_MAX_TURNS) {      /* D10: served the wait   */
+    if (pl->jailTurns >= JAIL_MAX_TURNS) {      /* Rule 13: the third     */
         pl->jailed    = false;
         pl->jailTurns = 0;
         printf("%s has served three turns and leaves Jail.\n", pl->name);
