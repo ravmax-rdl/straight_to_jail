@@ -67,6 +67,10 @@
  * D19 One clock       everything counts game rounds. A loan matures at
  *                     issuedRound + 20; property age is
  *                     round - purchasedRound and starts at purchase
+ * D33 Taxes due     income tax is ASSESSED every round at 15% of cash and
+ *                     COLLECTED on square 4; the balance stands in
+ *                     taxesDue, which is what Rule 15 subtracts. The rate
+ *                     fluctuates with inflation and LK 24        [Rule 11, 15]
  * D32 Selling        section 3 requires it and names no price: sold to the
  *                     Bank at current square_value, buildings down first
  *                     at D11's 50%. Never breaks a developed group [sec. 3]
@@ -386,6 +390,12 @@ void sell_property(GameState *g, int p, int sq);
 /* finance.c -- the two tax squares. Different bases (D2' cash, D16 property
    assets), so deliberately two functions rather than one parameterised. */
 int  total_assets(const GameState *g, int p);
+
+/* finance.c -- D33. Income tax is ASSESSED every round into Player.taxesDue
+   and COLLECTED when the player lands on square 4. The rate is
+   econ.incomeTaxPct, which drifts with inflation (D2', D21) and is scaled at
+   assessment time by EFF_TAX_MUL. */
+void accrue_income_tax(GameState *g);
 
 /* finance.c -- auctions (LK 19-23, D23). anchorPlayer is whoever's turn
    triggered it; bidding starts with the player after them. The opening price

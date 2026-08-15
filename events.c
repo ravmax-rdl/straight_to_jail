@@ -938,7 +938,7 @@ static const char *CARD_DETAILS[CARD_COUNT] = {
     "Your construction costs fall by 30%.",
     "Your loan interest falls by 2 percentage points.",
     "Your loan interest rises by 2 percentage points.",
-    "Outstanding taxes are forgiven.",
+    "Every player receives a payment from the treasury.",
     "Your utility rents halve for three rounds.",
     "Your commercial property values rise by 15%.",
     "Your railway values rise by 20%.",

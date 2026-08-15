@@ -146,18 +146,74 @@ int total_assets(const GameState *g, int p)
  * again at charge time -- x1.5 while the Increase Property Tax regulation is
  * active.
  */
+/* D33: income tax is ASSESSED every round and COLLECTED at square 4.
+ *
+ * Rule 11 makes landing the moment of payment, and D2' fixes the charge at
+ * 15% of current cash -- but neither says the liability begins there, and
+ * Rule 15 subtracts "Taxes Due" from net worth, a term that has to describe
+ * something. A tax that existed only during the instant of landing could
+ * never be due, so the assessment is what accrues and the square is where
+ * the bill is settled.
+ *
+ * Square is -1 for the EFF_TAX_MUL read because an assessment belongs to the
+ * player rather than to wherever they happen to be standing; only global and
+ * player-scoped records reach it, which is what LK 24's Increase Property Tax
+ * is.
+ *
+ * The add saturates for the reason D29 gives -- taxesDue is the second figure
+ * in the program that only ever grows, and a player who avoids square 4 for
+ * long enough would otherwise overflow it.
+ */
+void accrue_income_tax(GameState *g)
+{
+    int i;
+
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        Player *pl = &g->players[i];
+        int     rate, due;
+
+        if (pl->bankrupt) {
+            continue;
+        }
+
+        rate = apply_pct(g->econ.incomeTaxPct,
+                         effect_modifier(g, EFF_TAX_MUL, -1, i));
+        due  = pct_of(pl->cash, rate);
+
+        if (due <= 0) {
+            continue;
+        }
+        if (pl->taxesDue > INT_MAX - due) {
+            pl->taxesDue = INT_MAX;
+        } else {
+            pl->taxesDue += due;
+        }
+    }
+}
+
+/* Rule 11: landing on square 4 settles whatever has accrued, immediately.
+ * A player who has just been assessed and lands the same round pays that
+ * assessment; one who has avoided the square for ten rounds pays ten. */
 void pay_income_tax(GameState *g, int p)
 {
     char b[FMT_BUF];
-    int  rate = apply_pct(g->econ.incomeTaxPct,
-                          effect_modifier(g, EFF_TAX_MUL, g->players[p].pos, p));
-    int  due  = pct_of(g->players[p].cash, rate);
+    int  due = g->players[p].taxesDue;
 
     printf("%s landed on Income Tax.\n", g->players[p].name);
 
-    /* No else branch: charge now runs the D11 ladder and, failing that,
-       prints Rule 14's bankruptcy block itself. A "cannot pay" line here
-       would only repeat what has already been said, after it was said. */
+    if (due <= 0) {
+        printf("No tax is outstanding.\n");
+        return;
+    }
+
+    /* Cleared before the charge, not after. charge may run the D11 ladder and
+       end in Rule 14, and a bankrupt player must not carry a tax bill out of
+       the game with them -- declare_bankrupt settles what is left. */
+    g->players[p].taxesDue = 0;
+
+    /* No else branch: charge runs the D11 ladder and, failing that, prints
+       Rule 14's bankruptcy block itself. A "cannot pay" line here would only
+       repeat what has already been said, after it was said. */
     if (charge(g, p, due, -1)) {
         printf("Income Tax Paid : LKR %s.\n", fmt_lkr(b, due));
         printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));

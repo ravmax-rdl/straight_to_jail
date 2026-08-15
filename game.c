@@ -947,6 +947,7 @@ void play_round(GameState *g)
        LK 4 compounds first, so a loan defaults on the round its balance
        finally outgrows its term rather than a round later. */
     accrue_interest(g);             /* LK 4, D4                            */
+    accrue_income_tax(g);           /* D33: assessed here, collected at sq 4 */
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
     tick_insurance(g);              /* LK 9: policies lapse and warn       */
