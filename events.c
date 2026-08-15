@@ -476,7 +476,7 @@ static const EconomicEvent NATIONAL_EVENTS[] = {
 
     { "Government Housing Programme",
       "Construction costs fall by 25%.",
-      { { EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, -25 } }, 1 },
+      { { EFF_HOUSE_COST_MUL, SCOPE_GLOBAL, 0, -25 } }, 1 },
 
     { "Foreign Investment",
       "Commercial property values rise by 20%.",
@@ -703,8 +703,8 @@ static const EconomicEvent REGULATIONS[] = {
     { "Reduce Loan Interest", "Loan interest falls by 2 percentage points.",
       { { EFF_INTEREST_ADD, SCOPE_GLOBAL, 0, -2 } }, 1 },
 
-    { "Housing Subsidy", "Construction costs reduced by 30%.",
-      { { EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, -30 } }, 1 },
+    { "Housing Subsidy", "House construction costs reduced by 30%.",
+      { { EFF_HOUSE_COST_MUL, SCOPE_GLOBAL, 0, -30 } }, 1 },
 
     /* D24: charged once on activation, not a standing modifier at all. The
        zero effect count is what says so. */
@@ -1180,7 +1180,7 @@ static void apply_card(GameState *g, int p, int card)
         effect_push(g, EFF_VALUE_MUL, SCOPE_GLOBAL, 0, -15, p, CARD_ROUNDS);
         break;
     case CARD_HOUSING_SUBSIDY:
-        effect_push(g, EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, -30, p, CARD_ROUNDS);
+        effect_push(g, EFF_HOUSE_COST_MUL, SCOPE_GLOBAL, 0, -30, p, CARD_ROUNDS);
         break;
     case CARD_RATE_CUT:
         /* D21: percentage points, not a relative shift. */

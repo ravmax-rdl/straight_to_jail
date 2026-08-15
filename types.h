@@ -75,6 +75,16 @@
  *                     capacity and debt-recovery proceeds
  * D19 Age from buy    property age is round - purchasedRound and starts at
  *                     purchase, never before                    [clarified]
+ * D35 House subsidies Appendix B prices houses and hotels in separate
+ *                     columns, so "HOUSE construction costs reduce" names
+ *                     one of them. The Housing Programme, the Housing
+ *                     Subsidy regulation and its card discount houses
+ *                     only; LK 31's boom moves both      [LK 18, 24, 31]
+ * D36 No renewal      LK 9 promises a reminder three rounds out but never
+ *                     defines renewal -- no price, no term, no square. A
+ *                     policy therefore lapses and is rebought like any
+ *                     other. The reminder stands as section 5 shows it,
+ *                     and the gap is the spec's, not an omission   [LK 9]
  * D34 Two clocks      SUPERSEDES D19's single clock. A SINGLE-PLAYER effect
  *                     counts that player's own laps -- a loan matures 20 GO
  *                     passes after issue, a policy lapses 20 after purchase,
@@ -97,12 +107,13 @@
  *                     Players keep taking turns in order[] throughout, so a
  *                     round is several turns each             [Rule 15, LK]
  * D20 Single claim    a payout consumes the policy, whatever rounds remain
- * D21 Interest rate   REVISED. Table 9 is a LOOKUP, not a seed. The
- *                     prevailing condition picks the row: Recession 15%,
- *                     Stock Market Boom 5%, else LK 12's draw -- above 5%
- *                     High 12%, above 0 Moderate 10%, else Stable 8%. The
- *                     +/-2 point cards still adjust the issued rate; the
- *                     relative shifts now move LIVE loans instead   [App D]
+ * D21 Interest rate   REVISED TWICE. Table 9 alone governs a NEW loan:
+ *                     Recession 15%, Stock Market Boom 5%, else LK 12's
+ *                     draw -- above 5% High 12%, above 0 Moderate 10%,
+ *                     else Stable 8%. Nothing else touches the issued
+ *                     rate. EVERY other adjustment moves LIVE loans: the
+ *                     boom and recession shifts, LK 24's regulations and
+ *                     Appendix A's rate cards alike            [App D]
  * D22 Loan pledge     only the minimum set of assets, highest mortgage
  *                     value first, whose 75% LTV covers the amount
  * D23 Auction order   starts with the player immediately after the current
@@ -160,7 +171,8 @@ typedef enum {
    percentage -- it carries the Anti-Speculation Act's cap of 3. */
 typedef enum {
     EFF_VALUE_MUL, EFF_RENT_MUL, EFF_HOTEL_RENT_MUL, EFF_RAILWAY_RENT_MUL,
-    EFF_UTILITY_RENT_MUL, EFF_BUILD_COST_MUL, EFF_PREMIUM_MUL, EFF_MORTGAGE_MUL,
+    EFF_UTILITY_RENT_MUL, EFF_BUILD_COST_MUL, EFF_HOUSE_COST_MUL,
+    EFF_PREMIUM_MUL, EFF_MORTGAGE_MUL,
     EFF_AUCTION_OPEN_MUL, EFF_INTEREST_MUL, EFF_INTEREST_ADD, EFF_TAX_MUL,
     EFF_CLOSED, EFF_CONSTRUCTION_SUSPENDED, EFF_MAX_PROPERTIES,
     EFF_FLOOD_RISK, EFF_RIOT_RISK,

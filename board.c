@@ -709,7 +709,19 @@ int building_cost(const GameState *g, int sq, bool hotel)
     const Square *s    = &g->board[sq];
     int           cost = hotel ? s->hotelCost : s->houseCost;
 
-    return apply_pct(cost, effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner));
+    /* Appendix B prices houses and hotels in separate columns, which is
+       what makes "house construction cost" a quantity a rule can name --
+       and two of them do. Government Housing Programme and the Housing
+       Subsidy regulation both read "HOUSE construction costs reduce",
+       where LK 31's boom says only "construction costs increase". The
+       house-only kind therefore reaches this only when a house is being
+       priced; a subsidy that discounted hotels too was giving away a
+       column the rule never mentioned. */
+    cost = apply_pct(cost, effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner));
+    if (!hotel) {
+        cost = apply_pct(cost, effect_modifier(g, EFF_HOUSE_COST_MUL, sq, s->owner));
+    }
+    return cost;
 }
 
 /* LK 27: the cost of restoring one property to 100% condition -- 5% of

@@ -511,10 +511,8 @@ static const int TABLE9_RATE[] = { 5, 8, 10, 12, 15 };
  */
 int current_loan_rate(const GameState *g, int p)
 {
-    int rate = TABLE9_RATE[prevailing_condition(g)]
-             + effect_modifier(g, EFF_INTEREST_ADD, -1, p);
-
-    return rate < 0 ? 0 : rate;       /* a cut may reach zero, never below */
+    (void)p;                          /* nothing player-scoped reaches it  */
+    return TABLE9_RATE[prevailing_condition(g)];
 }
 
 /* LK 2-4, 13. Credits the cash immediately and freezes the rate for life. */
@@ -779,8 +777,17 @@ void accrue_interest(GameState *g)
            lasts, a boom eases it. Read once per round because the modifier
            cannot change between one lap and the next, and applied to a local
            so the frozen rate stays frozen. */
-        rate = apply_pct(pl->loan.ratePct,
-                         effect_modifier(g, EFF_INTEREST_MUL, -1, i));
+        /* D21: every live adjustment lands here and none of them at
+           issue. The percentage-point instruments -- LK 24's Reduce Loan
+           Interest and Appendix A's rate cards -- move an existing debt
+           alongside the relative shifts a recession or boom applies.
+           Additive first, then relative, as D21 has always ordered them;
+           the frozen ratePct is never written, so LK 13 still holds. */
+        rate = pl->loan.ratePct + effect_modifier(g, EFF_INTEREST_ADD, -1, i);
+        rate = apply_pct(rate, effect_modifier(g, EFF_INTEREST_MUL, -1, i));
+        if (rate < 0) {
+            rate = 0;                 /* a cut may reach zero, never below */
+        }
 
         /* D34: a loan is a single-player instrument, so it compounds on the
            borrower's clock -- once per lap they completed this round, not

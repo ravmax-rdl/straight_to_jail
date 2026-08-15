@@ -470,8 +470,17 @@ static void renovate_step(GameState *g, int p, int sq)
         return;
     }
 
-    s->depreciationPct = 0;
-    s->purchasedRound  = g->round;      /* D19: the age resets with it     */
+    /* LK 17 restores three things, and the rent is the one that was
+       missing: depreciation only ever touched square_value, so clearing
+       it "increased rental" by nothing at all. Condition is what Table 3
+       reads, so restoring it to 100 is what puts the rent back to full.
+       The neglect counter goes with it -- a renovated building has not
+       been standing unmaintained, and leaving the count to climb would
+       hand LK 28 structural damage to a property just rebuilt. */
+    s->depreciationPct    = 0;
+    s->conditionPct       = 100;
+    s->unmaintainedRounds = 0;
+    s->purchasedRound     = g->round;   /* D19: the age resets with it     */
 
     printf("%s renovated %s.\n", g->players[p].name, s->name);
     printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
