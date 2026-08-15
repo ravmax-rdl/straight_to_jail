@@ -431,9 +431,10 @@ Spec §5 prescribes exact console messages, graded character-for-character. Thre
   matches a turn's actual causal order.
 - Every monetary figure goes through `fmt_lkr`, which renders thousands separators (`LKR 12,300`).
   No `printf("%d")` on money, anywhere.
-- Blocks are **compact** — no blank lines between the lines of a block (**D26**). All block output
-  goes through helpers in `game.c`, so if the lecturer confirms the PDF's spacing is literal, the
-  convention inverts in one place.
+- Blank lines are content (**D26**, revised twice). Within a block a labelled category opens a new
+  group; between blocks, every message type is terminated by `end_block()` in `game.c`, so two
+  different kinds of output never run together. The `Round N Summary` and `Current Market
+  Conditions` tables are the exceptions and stay internally compact.
 
 The two block-format outputs — `Round N Summary` (45-character rules) and `Current Market Conditions`
 (41-character rules) — print at the end of **every** round, in that order.
