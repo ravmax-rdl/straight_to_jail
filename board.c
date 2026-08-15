@@ -675,8 +675,10 @@ void depreciation_tick(GameState *g)
         printf("Property\n");
         printf("%s\n", s->name);
         printf("has depreciated by %d%%.\n", s->depreciationPct);
+        printf("\n");
         printf("Current Value\n");
         printf("LKR %s.\n", fmt_lkr(b, square_value(g, i)));
+        end_block();
     }
 }
 
@@ -916,6 +918,7 @@ void move_player(GameState *g, int p, int steps)
     int     to   = (from + steps) % NUM_SQUARES;
 
     printf("%s moves from Square %d to Square %d.\n", pl->name, from, to);
+    end_block();
     pl->pos = to;
 
     if (to < from || to == SQ_IDX_GO) {
@@ -931,5 +934,6 @@ void move_player(GameState *g, int p, int steps)
         printf("%s passed GO.\n", pl->name);
         printf("Collected LKR %s.\n", fmt_lkr(b, GO_SALARY));
         printf("Current Balance : LKR %s.\n", fmt_lkr(b, pl->cash));
+        end_block();
     }
 }

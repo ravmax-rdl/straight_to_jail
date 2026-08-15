@@ -275,6 +275,7 @@ void draw_inflation(GameState *g)
        its neighbours. */
     printf("Inflation Rate : %+d%%\n", pct);
     printf("All property values, costs and rents have been recalculated.\n");
+    end_block();
 }
 
 /* -------------------------------------------------- booms and declines -- */
@@ -563,6 +564,7 @@ static void fire_event(GameState *g, const EconomicEvent *ev, const char *headin
     printf("%s\n", heading);
     printf("%s%s\n", ev->name, suffix);
     printf("%s\n", ev->detail);
+    end_block();
 }
 
 /* LK 18, every fifteen rounds, affecting everyone.
@@ -687,6 +689,7 @@ static void levy_luxury_tax(GameState *g)
         if (charge(g, s->owner, due, -1)) {
             printf("Luxury Tax Paid : LKR %s.\n", fmt_lkr(b, due));
         }
+        end_block();
     }
 }
 
@@ -843,8 +846,10 @@ void fire_disaster(GameState *g)
     g->players[s->owner].sufferedLoss = true; /* the Risk Taker's trigger  */
 
     printf("%s occurred.\n", DISASTER_NAMES[peril]);
+    printf("\n");
     printf("Affected Property :\n");
     printf("%s.\n", s->name);
+    printf("\n");
 
     coverPct = covers(s->policy, peril, s->hotel);
     if (coverPct == 0) {
@@ -856,6 +861,7 @@ void fire_disaster(GameState *g)
             printf("Repair Cost :\n");
             printf("LKR %s.\n", fmt_lkr(b, cost));
         }
+        end_block();
         return;
     }
 
@@ -879,6 +885,7 @@ void fire_disaster(GameState *g)
     printf("Insurance Claim Approved.\n");
     printf("Compensation Paid :\n");
     printf("LKR %s.\n", fmt_lkr(b, payout));
+    end_block();
 }
 
 /* LK 11, once per round. Damage is a pause on the income, not the end of it:
@@ -910,6 +917,7 @@ void auto_repairs(GameState *g)
         s->damaged = false;
         printf("%s repaired %s.\n", g->players[s->owner].name, s->name);
         printf("Repair Cost : LKR %s.\n", fmt_lkr(b, cost));
+        end_block();
     }
 }
 
@@ -1155,4 +1163,5 @@ void draw_event_card(GameState *g, int p)
     printf("%s\n", CARD_NAMES[card]);
     printf("%s\n", CARD_DETAILS[card]);
     apply_card(g, p, card);
+    end_block();
 }

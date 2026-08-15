@@ -203,6 +203,7 @@ void pay_income_tax(GameState *g, int p)
 
     if (due <= 0) {
         printf("No tax is outstanding.\n");
+        end_block();
         return;
     }
 
@@ -217,6 +218,7 @@ void pay_income_tax(GameState *g, int p)
     if (charge(g, p, due, -1)) {
         printf("Income Tax Paid : LKR %s.\n", fmt_lkr(b, due));
         printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+        end_block();
     }
 }
 
@@ -238,6 +240,7 @@ void pay_community_fund(GameState *g, int p)
     if (charge(g, p, due, -1)) {
         printf("Contribution Paid : LKR %s.\n", fmt_lkr(b, due));
         printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+        end_block();
     }
 }
 
@@ -295,10 +298,13 @@ void run_auction(GameState *g, int sq, int anchorPlayer)
     }
 
     printf("Auction Started.\n");
+    printf("\n");
     printf("Property :\n");
     printf("%s\n", g->board[sq].name);
+    printf("\n");
     printf("Opening Bid :\n");
     printf("LKR %s.\n", fmt_lkr(b, opening));
+    printf("\n");
 
     /* D23: start immediately after the anchor, then clockwise. */
     seat = (anchorPlayer + 1) % NUM_PLAYERS;
@@ -351,6 +357,7 @@ void run_auction(GameState *g, int sq, int anchorPlayer)
 
     if (highBidder < 0) {
         printf("No bids received. %s remains with the Bank.\n", g->board[sq].name);
+        end_block();
         return;
     }
 
@@ -358,6 +365,7 @@ void run_auction(GameState *g, int sq, int anchorPlayer)
     g->board[sq].owner          = highBidder;
     g->board[sq].purchasedRound = g->round;       /* D19                   */
     printf("%s wins the auction.\n", g->players[highBidder].name);
+    end_block();
 }
 
 /* --------------------------------------------------------------- loans -- */
@@ -516,6 +524,7 @@ void grant_loan(GameState *g, int p, int amount)
     printf("\n");
     printf("Interest Rate : %d%%\n", rate);
     printf("Duration : %d Rounds\n", LOAN_ROUNDS);
+    end_block();
 
     pl->loan.active      = true;
     pl->loan.principal   = amount;
@@ -623,6 +632,7 @@ void repay_loan(GameState *g, int p, int amount)
 
     printf("Outstanding Balance :\n");
     printf("LKR %s.\n", fmt_lkr(b, pl->loan.principal));
+    end_block();
 }
 
 /* Forward declarations for the two disposal helpers defined further down:
@@ -676,6 +686,7 @@ void sell_property(GameState *g, int p, int sq)
     printf("\n");
     printf("Sale Price : LKR %s.\n", fmt_lkr(b, proceeds));
     printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+    end_block();
 }
 
 /* D31: lift a mortgage by repaying it, at the Bank square.
@@ -716,6 +727,7 @@ void redeem_mortgage(GameState *g, int p, int sq)
     printf("\n");
     printf("Redemption Cost : LKR %s.\n", fmt_lkr(b, due));
     printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+    end_block();
 }
 
 /* LK 4 and D4, once per round for every live loan.
@@ -933,8 +945,8 @@ void buy_policy(GameState *g, int p, int sq, InsuranceType tier)
     printf("%s Insurance purchased.\n", TIER_NAMES[tier]);
     printf("\n");
     printf("Property : %s\n", s->name);
-    printf("\n");
     printf("Premium : LKR %s.\n", fmt_lkr(b, due));
+    end_block();
 }
 
 /* LK 9, once per round. Warns three rounds out and lapses at zero.
@@ -966,6 +978,7 @@ void tick_insurance(GameState *g)
             s->policyWarned = true;
             printf("Insurance policy on %s expires in %d rounds.\n",
                    s->name, INS_WARN_ROUNDS);
+            end_block();
         }
         if (left <= 0) {
             s->policy       = INS_NONE;
@@ -1027,6 +1040,7 @@ static void sell_one_building(GameState *g, int p, int sq)
 
     credit(g, p, refund);
     printf("Received LKR %s.\n", fmt_lkr(b, refund));
+    end_block();
 }
 
 /* D11, called by charge and by nothing else. Returns whether p can now cover
@@ -1099,6 +1113,7 @@ bool raise_funds(GameState *g, int p, int needed)
         credit(g, p, bestValue);
         printf("%s mortgaged %s.\n", g->players[p].name, g->board[best].name);
         printf("Received LKR %s.\n", fmt_lkr(b, bestValue));
+        end_block();
     }
 
     return g->players[p].cash >= needed;
@@ -1130,6 +1145,7 @@ void declare_bankrupt(GameState *g, int p, int creditor)
 
     printf("%s has been declared bankrupt.\n", pl->name);
     printf("Remaining assets transferred to the Bank.\n");
+    end_block();
 
     /* The one assignment to cash outside credit and charge. Zeroing a
        bankrupt player's balance is not a transaction -- there is no second

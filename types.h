@@ -107,10 +107,10 @@
  *                     purchases -- how a square arrives is irrelevant.
  *                     Holding more than three makes construction
  *                     compulsory, overriding personality        [LK 24]
- * D26 Output spacing  CORRECTED, per block. Six section 5 blocks carry real
- *                     blank lines between categories -- rent, construction,
- *                     loan, repayment, default, insurance. The rest are
- *                     compact, the round summary included         [sec. 5]
+ * D26 Output spacing  REVISED. Every message type ends with a blank line,
+ *                     so two kinds of output never run together. Within a
+ *                     block, a labelled category opens a new group; the
+ *                     round summary and market table stay compact [sec. 5]
  * ------------------------------------------------------------------------ */
 
 #include <stdbool.h>
@@ -549,6 +549,7 @@ void play_round(GameState *g);
 bool game_over(const GameState *g);
 void game_run(GameState *g);
 void land_on(GameState *g, int p, int sq, int diceTotal);
+void end_block(void);
 void round_summary(const GameState *g);
 void market_conditions(const GameState *g);
 void final_report(const GameState *g);

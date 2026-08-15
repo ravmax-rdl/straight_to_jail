@@ -167,6 +167,7 @@ void determine_order(GameState *g)
     for (i = 0; i < NUM_PLAYERS; i++) {
         printf("%s\n", g->players[g->order[i]].name);
     }
+    end_block();
 }
 
 /* ------------------------------------------------------- block output ---- */
@@ -179,6 +180,15 @@ void determine_order(GameState *g)
    blank lines between their categories -- see D26 for which. */
 #define SUMMARY_RULE 45
 #define MARKET_RULE  41
+
+/* D26: every message type ends with a blank line, so two different kinds of
+   output are never run together. Named rather than a bare newline because
+   the blank is content -- section 5 shows it -- and a reader deleting a
+   stray putchar would silently break the format. */
+void end_block(void)
+{
+    putchar('\n');
+}
 
 static void rule_line(char c, int n)
 {
@@ -451,6 +461,7 @@ static void renovate_step(GameState *g, int p, int sq)
 
         printf("%s rebuilt %s.\n", g->players[p].name, s->name);
         printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
+        end_block();
         return;
     }
 
@@ -464,6 +475,7 @@ static void renovate_step(GameState *g, int p, int sq)
 
     printf("%s renovated %s.\n", g->players[p].name, s->name);
     printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
+    end_block();
 }
 
 static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
@@ -481,6 +493,7 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
             printf("%s purchased %s for LKR %s.\n", g->players[p].name, s->name,
                    fmt_lkr(b, price));
             printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+            end_block();
         } else {
             /* Rule 5 gives no third option: a declined square goes straight
                to auction, and LK 19 lets the decliner bid in it. */
@@ -511,8 +524,8 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
        the creditor has already received whatever was left. */
     if (charge(g, p, rent, s->owner)) {
         printf("Rent Paid : LKR %s.\n", fmt_lkr(b, rent));
-        printf("\n");
         printf("Owner : %s.\n", g->players[s->owner].name);
+        end_block();
     }
 }
 
@@ -572,6 +585,7 @@ void land_on(GameState *g, int p, int sq, int diceTotal)
         g->players[p].jailed    = true;
         g->players[p].jailTurns = 0;
         printf("%s was sent to Jail.\n", g->players[p].name);
+        end_block();
         break;
 
     case SQ_BANK:
@@ -627,12 +641,14 @@ static bool resolve_jail(GameState *g, int p, int d1, int d2)
     if (d1 == d2) {                             /* Rule 13: doubles       */
         pl->jailed = false;
         printf("%s rolled doubles and left Jail.\n", pl->name);
+        end_block();
         return true;
     }
 
     if (charge(g, p, JAIL_BAIL, -1)) {          /* Rule 13: pay the bail  */
         pl->jailed = false;
         printf("%s paid LKR %s bail.\n", pl->name, fmt_lkr(b, JAIL_BAIL));
+        end_block();
         return true;
     }
 
@@ -641,10 +657,12 @@ static bool resolve_jail(GameState *g, int p, int d1, int d2)
         pl->jailed    = false;
         pl->jailTurns = 0;
         printf("%s has served three turns and leaves Jail.\n", pl->name);
+        end_block();
         return true;
     }
 
     printf("%s is in Jail.\n", pl->name);
+    end_block();
     return false;
 }
 
@@ -766,6 +784,7 @@ static void build_step(GameState *g, int p)
             s->houses = 0;
             s->hotel  = true;
             printf("%s upgraded %s to a Hotel.\n", g->players[p].name, s->name);
+            end_block();
             /* Section 5 gives the hotel upgrade no cost line, unlike house
                construction. The asymmetry is in the template, not an
                oversight here. */
@@ -774,6 +793,7 @@ static void build_step(GameState *g, int p)
             printf("%s constructed one house on %s.\n", g->players[p].name, s->name);
             printf("\n");
             printf("Construction Cost : LKR %s.\n", fmt_lkr(b, cost));
+            end_block();
         }
 
         s->conditionPct       = 100;    /* LK 25: new work begins sound      */
@@ -836,6 +856,7 @@ static void maintenance_step(GameState *g, int p)
         printf("%s maintained %s.\n", g->players[p].name, s->name);
         printf("\n");
         printf("Maintenance Cost : LKR %s.\n", fmt_lkr(b, cost));
+        end_block();
     }
 }
 
@@ -852,6 +873,7 @@ void play_turn(GameState *g, int p)
 
     total = roll_dice(&d1, &d2);                    /* 2. roll two dice   */
     printf("%s rolled %d.\n", g->players[p].name, total);
+    end_block();
 
     /* 1. resolve outstanding penalties. Also step 1, and it lands after the
        roll only because Rule 13's doubles test needs the dice. Maintenance
