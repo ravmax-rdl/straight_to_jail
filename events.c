@@ -888,64 +888,43 @@ static Disaster pick_peril(const GameState *g)
     return DIS_FIRE;
 }
 
-/* LK 10, every ten rounds. Strikes one developed property at random.
+/* LK 10's claim, for every source of damage rather than only the LK 10
+ * one. Appendix A damages property too -- "Heavy Floods: random coastal
+ * property damaged", "National Disaster: random developed property
+ * damaged" -- and those went through no claim at all, so an insured owner
+ * paid the repair with no compensation and kept a policy that should have
+ * been spent. The cover and the percentage come from section 1.2 and
+ * Appendix E either way, which is what D3 already encodes.
  *
- * D20 is the clause easiest to miss and hardest to spot afterwards: a payout
- * CONSUMES the policy whatever rounds remain on it. A property struck twice
- * is insured for the first only. The policy is cleared before the claim block
- * prints, so there is no path through this function that pays twice.
+ * Terminates nothing: fire_disaster closes its own block, and a card
+ * settles inside the block draw_event_card closes.
  */
-void fire_disaster(GameState *g)
+static void settle_claim(GameState *g, int sq, Disaster peril)
 {
-    char     b[FMT_BUF];
-    int      sq = random_square_where(g, 0u, true);
-    Square  *s;
-    Disaster peril;
-    int      cost, coverPct, payout;
+    char    b[FMT_BUF];
+    Square *s = &g->board[sq];
+    int     cost, coverPct, payout;
 
-    if (sq < 0) {
-        return;                    /* nothing developed yet to strike       */
-    }
-
-    s     = &g->board[sq];
-    peril = pick_peril(g);
-    cost  = repair_cost(g, sq);
-
-    s->damaged = true;                       /* LK 11: earns nothing now   */
-    g->players[s->owner].sufferedLoss = true; /* the Risk Taker's trigger  */
-
-    printf("%s occurred.\n", DISASTER_NAMES[peril]);
-    printf("\n");
-    printf("Affected Property :\n");
-    printf("%s.\n", s->name);
-    printf("\n");
-
+    cost     = repair_cost(g, sq);
     coverPct = covers(s->policy, peril, s->hotel);
+
     if (coverPct == 0) {
         /* Uninsured, or insured against something else -- so no money
-           moves here. The bill was charged in this block as well, which
-           billed it TWICE: the square stays damaged either way, and
-           auto_repairs then charged the same repair again on its way to
-           clearing the flag. 36 of 66 uninsured repairs were paid twice.
-
-           LK 11 owns the repair -- "repairs are automatically performed
-           when the owner has sufficient funds" -- and LK 10 only says who
-           bears the cost, not when. Leaving it to auto_repairs also makes
-           the two paths symmetric: the disaster damages and, if insured,
-           pays compensation; the repair itself is always performed and
-           billed exactly once. Section 5 templates only the insured path,
-           so nothing graded is lost with the two invented lines. */
+           moves here. LK 11 owns the repair: "repairs are automatically
+           performed when the owner has sufficient funds", and LK 10 only
+           says who bears the cost, not when. Charging here as well billed
+           it twice, since auto_repairs charges again on its way to
+           clearing the flag. Section 5 templates only the insured path. */
         printf("No claim is payable.\n");
-        end_block();
         return;
     }
 
     payout = pct_of(cost, coverPct);
 
-    /* D3: Business Interruption also pays five rounds of lost hotel rent, as
-       an immediate lump sum. Read before the policy is cleared, and computed
-       off the undamaged rent -- square_rent would return zero now that the
-       damaged flag is set, which is the loss being compensated. */
+    /* D3: Business Interruption also pays five rounds of lost hotel rent,
+       as an immediate lump sum. Read before the policy is cleared, and
+       computed off the undamaged rent -- square_rent returns zero now that
+       the flag is set, which is the loss being compensated. */
     if (s->policy == INS_BUSINESS) {
         s->damaged = false;
         payout += square_rent(g, sq, 0) * BI_RENT_ROUNDS;
@@ -960,6 +939,38 @@ void fire_disaster(GameState *g)
     printf("Insurance Claim Approved.\n");
     printf("Compensation Paid :\n");
     printf("LKR %s.\n", fmt_lkr(b, payout));
+}
+
+/* LK 10, every ten rounds. Strikes one developed property at random.
+ *
+ * D20 is the clause easiest to miss and hardest to spot afterwards: a payout
+ * CONSUMES the policy whatever rounds remain on it. A property struck twice
+ * is insured for the first only. The policy is cleared before the claim block
+ * prints, so there is no path through this function that pays twice.
+ */
+void fire_disaster(GameState *g)
+{
+    int      sq = random_square_where(g, 0u, true);
+    Square  *s;
+    Disaster peril;
+
+    if (sq < 0) {
+        return;                    /* nothing developed yet to strike       */
+    }
+
+    s     = &g->board[sq];
+    peril = pick_peril(g);
+
+    s->damaged = true;                       /* LK 11: earns nothing now   */
+    g->players[s->owner].sufferedLoss = true; /* the Risk Taker's trigger  */
+
+    printf("%s occurred.\n", DISASTER_NAMES[peril]);
+    printf("\n");
+    printf("Affected Property :\n");
+    printf("%s.\n", s->name);
+    printf("\n");
+
+    settle_claim(g, sq, peril);
     end_block();
 }
 
@@ -1111,7 +1122,7 @@ static int random_owned_square(GameState *g, int p)
  * here, before repairs exist, would kill the property for the rest of the
  * game rather than until its owner could afford the work.
  */
-static void damage_square(GameState *g, int sq)
+static void damage_square(GameState *g, int sq, Disaster peril)
 {
     if (sq < 0) {
         return;                    /* nothing developed to strike   */
@@ -1134,7 +1145,13 @@ static void damage_square(GameState *g, int sq)
 #endif
 
     g->board[sq].damaged = true;
+    g->players[g->board[sq].owner].sufferedLoss = true;
     printf("%s has been damaged.\n", g->board[sq].name);
+
+    /* A card damages exactly as a disaster does, so it claims exactly as
+       one does. Without this an insured owner met the repair themselves
+       and kept a policy that LK 10 and D20 say should have been spent. */
+    settle_claim(g, sq, peril);
 }
 
 /* Appendix A's twenty, as a switch rather than a table.
@@ -1164,7 +1181,8 @@ static void apply_card(GameState *g, int p, int card)
         effect_push(g, EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, +100, p, 5);
         break;
     case CARD_HEAVY_FLOODS:
-        damage_square(g, random_square_where(g, REGION_COASTAL, true));
+        damage_square(g, random_square_where(g, REGION_COASTAL, true),
+                      DIS_FLOOD);        /* the card names its peril */
         break;
     case CARD_POLITICAL_RALLY:
         sq = random_owned_square(g, p);
@@ -1237,7 +1255,7 @@ static void apply_card(GameState *g, int p, int card)
                fmt_lkr(b, CARD_GRANT_AMOUNT));
         break;
     case CARD_NATIONAL_DISASTER:
-        damage_square(g, random_square_where(g, 0u, true));
+        damage_square(g, random_square_where(g, 0u, true), pick_peril(g));
         break;
     case CARD_COUNT:
         break;
