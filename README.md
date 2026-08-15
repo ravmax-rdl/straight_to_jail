@@ -117,15 +117,13 @@ after one turn each (decision **D30**), so a round spans roughly six turns per p
 timed system is measured in rounds: inflation every 10, events every 15, regulations every 20,
 loan terms and policy life 20, depreciation from age 50.
 
-Two known limitations, both documented rather than hidden:
+A **mortgage** and a **loan** are separate instruments — Rule-LK 3 has loan-locked collateral
+"continue earning rent" and bars it from being "additionally mortgaged", while Rule 7 stops a
+*mortgaged* property earning at all. Both are settled at the Bank square, one action per landing:
+LK 5's five loan actions, plus redeeming a mortgage at its current value (decision **D31**).
 
-- **A mortgage cannot be lifted.** A mortgage and a loan are separate instruments in the rules
-  — Rule-LK 3 has loan-locked collateral "continue earning rent" and bars it from being
-  "additionally mortgaged", while Rule 7 stops a *mortgaged* property earning at all — but the
-  spec never prices redemption. So a mortgaged property stays mortgaged: no rent, and its colour
-  group barred from development for the rest of the game. This makes the D11 recovery ladder a
-  one-way door and is the main reason the most cash-stressed personality struggles to reach
-  hotels.
+Two deliberate readings, documented rather than hidden:
+
 - **Net worth follows Rule 15, not the introduction.** The spec states net worth twice and the
   two disagree; Rule 15's formula carries no mortgage term (decision **D28**). A mortgaged
   square is therefore still counted at full market value, so mortgaging raises the reported
@@ -136,7 +134,7 @@ Two known limitations, both documented rather than hidden:
 
 | Document | What it is |
 |----------|------------|
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D30** — including the three where the lecturer's clarifications override the PDF |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D31** — including the three where the lecturer's clarifications override the PDF |
 | [`docs/superpowers/specs/straight-to-jail-architecture-design.md`](docs/superpowers/specs/straight-to-jail-architecture-design.md) | Architecture rationale — the `Rent.csv` loader, the effect registry, the choke points, the round scheduler |
 | [`docs/superpowers/plans/straight-to-jail-staged.md`](docs/superpowers/plans/straight-to-jail-staged.md) | The implementation plan — six milestones, every step compiling clean and running |
 | [`docs/reference/`](docs/reference/) | Three reference notes — the C, the data structures, the economic mathematics |

@@ -67,6 +67,10 @@
  * D19 One clock       everything counts game rounds. A loan matures at
  *                     issuedRound + 20; property age is
  *                     round - purchasedRound and starts at purchase
+ * D31 Redemption      a mortgage is lifted by repaying the CURRENT mortgage
+ *                     value at the Bank square, one action per landing like
+ *                     LK 5's five. Rent and development resume; no interest
+ *                     accrues meanwhile, the spec naming none    [Rule 7, R1.8]
  * D30 A round         SUPERSEDES the earlier reading. A round is one LAP of
  *                     the board: it ends when every solvent player has
  *                     passed GO since it began, not after one turn each.
@@ -141,12 +145,13 @@ typedef enum {
     SCOPE_GLOBAL, SCOPE_GROUP, SCOPE_REGION, SCOPE_SQUARE, SCOPE_PLAYER
 } EffectScope;
 
-/* LK 5's five loan actions, plus doing nothing. R1.8 allows exactly one per
-   landing on the Bank square, which is what makes this an enum rather than a
-   set of flags: decide_bank picks one and game.c performs it. */
+/* LK 5's five loan actions, plus D31's mortgage redemption, plus doing
+   nothing. Exactly one per landing on the Bank square, which is what makes
+   this an enum rather than a set of flags: decide_bank picks one and game.c
+   performs it. BANK_REDEEM is the only member that names a square. */
 typedef enum {
     BANK_NONE, BANK_OBTAIN, BANK_REPAY_PART, BANK_REPAY_FULL,
-    BANK_EXTEND, BANK_INCREASE
+    BANK_EXTEND, BANK_INCREASE, BANK_REDEEM
 } BankAction;
 
 /* D14 region tags. A bitmask rather than an enum because a square belongs to
@@ -397,6 +402,7 @@ void grant_loan(GameState *g, int p, int amount);
 void increase_loan(GameState *g, int p, int extra);
 void extend_loan(GameState *g, int p);
 void repay_loan(GameState *g, int p, int amount);
+void redeem_mortgage(GameState *g, int p, int sq);
 void accrue_interest(GameState *g);
 void check_loan_default(GameState *g);
 
@@ -496,9 +502,10 @@ int  decide_insurance(GameState *g, int p, InsuranceType *tier);
 bool decide_renovate(GameState *g, int p, int sq);
 int  decide_liquidate(GameState *g, int p);
 
-/* decide_bank returns the one LK 5 action to take on this landing (R1.8),
-   writing the sum involved to *amount for the three that need one. */
-BankAction decide_bank(GameState *g, int p, int *amount);
+/* decide_bank returns the one Bank action to take on this landing (R1.8),
+   writing the sum involved to *amount for the three that need one and the
+   target to *square for BANK_REDEEM (D31). *square is -1 otherwise. */
+BankAction decide_bank(GameState *g, int p, int *amount, int *square);
 
 /* game.c -- the simulation engine. */
 bool game_init(GameState *g, const char *csvPath);

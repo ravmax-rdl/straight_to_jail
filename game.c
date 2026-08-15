@@ -501,7 +501,8 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
 static void bank_visit(GameState *g, int p)
 {
     int        amount = 0;
-    BankAction act    = decide_bank(g, p, &amount);
+    int        square = -1;
+    BankAction act    = decide_bank(g, p, &amount, &square);
 
     switch (act) {
     case BANK_OBTAIN:     grant_loan(g, p, amount);     break;
@@ -509,6 +510,7 @@ static void bank_visit(GameState *g, int p)
     case BANK_REPAY_FULL: repay_loan(g, p, amount);     break;
     case BANK_EXTEND:     extend_loan(g, p);            break;
     case BANK_INCREASE:   increase_loan(g, p, amount);  break;
+    case BANK_REDEEM:     redeem_mortgage(g, p, square); break;  /* D31 */
     case BANK_NONE:                                     break;
     }
 }

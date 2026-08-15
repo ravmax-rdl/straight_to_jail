@@ -830,24 +830,87 @@ static BankAction bank_opportunist(GameState *g, int p, int *amount)
     return BANK_NONE;
 }
 
-BankAction decide_bank(GameState *g, int p, int *amount)
+/* D31: which mortgage is worth lifting, or -1.
+ *
+ * Redeeming restores three things at once -- Rule 7's rent, the group's
+ * eligibility to be developed under Rule 8, and the square's standing as
+ * collateral -- so the square that unblocks a monopoly is worth more than a
+ * cheaper one that does not. Failing that, the dearest is taken, since
+ * mortgage value tracks the rent the square will resume earning.
+ *
+ * Only redeem what leaves something behind. Spending the last rupee to lift
+ * a mortgage puts the player straight back down the D11 ladder on the next
+ * rent they owe, and the ladder would re-mortgage the same square.
+ */
+static int redeemable(GameState *g, int p)
 {
+    int i, best = -1, bestValue = 0;
+
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+        int           due, value;
+
+        if (s->owner != p || !s->mortgaged) {
+            continue;
+        }
+        due = mortgage_value(g, i);
+        if (g->players[p].cash < due * 2) {
+            continue;                            /* leaves nothing behind   */
+        }
+
+        /* A square whose group p otherwise owns outright is the one holding
+           Rule 8 hostage; weight it above any bare rent comparison. */
+        value = completes_group(g, p, i) ? due * 2 : due;
+        if (value > bestValue) {
+            best      = i;
+            bestValue = value;
+        }
+    }
+
+    return best;
+}
+
+BankAction decide_bank(GameState *g, int p, int *amount, int *square)
+{
+    BankAction act = BANK_NONE;
+
     *amount = 0;
+    *square = -1;
 
     switch (g->players[p].strat) {
     case STRAT_AGGRESSIVE:
-        return bank_aggressive(g, p, amount);
-
+        act = bank_aggressive(g, p, amount);
+        break;
     case STRAT_CONSERVATIVE:
-        return bank_conservative(g, p, amount);
-
+        act = bank_conservative(g, p, amount);
+        break;
     case STRAT_RISKTAKER:
-        return bank_risktaker(g, p, amount);
-
+        act = bank_risktaker(g, p, amount);
+        break;
     case STRAT_OPPORTUNIST:
-        return bank_opportunist(g, p, amount);
+        act = bank_opportunist(g, p, amount);
+        break;
     }
-    return BANK_NONE;
+
+    /* Loan business first, redemption second, and only ever one of the two
+     * (R1.8). A loan compounds every round under D4 while a mortgage sits
+     * still, so a round spent on the debt that is growing is worth more than
+     * one spent on the debt that is not.
+     *
+     * The Risk Taker is excluded outright rather than by threshold: R4.3 has
+     * it borrowing the maximum and refinancing at every opportunity, and a
+     * personality that never repays a loan does not clear a mortgage either.
+     */
+    if (act == BANK_NONE && g->players[p].strat != STRAT_RISKTAKER) {
+        int sq = redeemable(g, p);
+
+        if (sq >= 0) {
+            *square = sq;
+            return BANK_REDEEM;
+        }
+    }
+
+    return act;
 }
 
 /* ---------------------------------------------------------- liquidation -- */

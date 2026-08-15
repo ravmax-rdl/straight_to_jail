@@ -544,6 +544,45 @@ void repay_loan(GameState *g, int p, int amount)
     printf("LKR %s.\n", fmt_lkr(b, pl->loan.principal));
 }
 
+/* D31: lift a mortgage by repaying it, at the Bank square.
+ *
+ * The spec leaves this open. Mortgaging is defined -- LK 2 prices it, Rule 7
+ * suppresses the rent, R3.3 bars it on loan-locked assets -- but no rule says
+ * how the state ends, which left it permanent and made D11's ladder a
+ * one-way door: a property mortgaged once earned nothing again and barred its
+ * colour group from development for the rest of the game.
+ *
+ * The price is the CURRENT mortgage value, the same choke point that priced
+ * the advance. That makes redemption track inflation and LK 32's decline
+ * exactly as the advance did, and it invents no figure. No interest accrues
+ * in between, because unlike a loan the spec gives a mortgage neither a rate
+ * nor a term to accrue over -- inventing one would be a second new rule to
+ * support the first.
+ *
+ * Cash is tested before charging, on the usual principle: redemption is
+ * voluntary, and selling buildings to lift a mortgage is not a trade the D11
+ * ladder should be asked to make.
+ */
+void redeem_mortgage(GameState *g, int p, int sq)
+{
+    char    b[FMT_BUF];
+    Square *s   = &g->board[sq];
+    int     due = mortgage_value(g, sq);
+
+    if (s->owner != p || !s->mortgaged) {
+        return;
+    }
+    if (g->players[p].cash < due || !charge(g, p, due, -1)) {
+        return;
+    }
+
+    s->mortgaged = false;
+
+    printf("%s redeemed %s.\n", g->players[p].name, s->name);
+    printf("Redemption Cost : LKR %s.\n", fmt_lkr(b, due));
+    printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
+}
+
 /* LK 4 and D4, once per round for every live loan.
  *
  * At the rate the loan was ISSUED at, never the current one -- LK 13 freezes
