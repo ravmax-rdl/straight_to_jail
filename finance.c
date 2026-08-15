@@ -188,9 +188,14 @@ void pay_community_fund(GameState *g, int p)
 /* ------------------------------------------------------------ auctions -- */
 
 /* LK 19's opening price: half of market value, then LK 32's -25% while the
- * group is in decline. Shared with decide_bid so a strategy can reason about
- * the opening without recomputing it -- one definition, two readers. */
-int auction_opening(const GameState *g, int sq)
+ * group is in decline.
+ *
+ * Static, with one caller. It was public so that decide_bid could reason
+ * about the opening without recomputing it, but that need disappeared when
+ * milestone 2 changed decide_bid to take minBid rather than the drafted
+ * currentBid: run_auction hands the opening straight to the first bidder, so
+ * a strategy already has the figure. */
+static int auction_opening(const GameState *g, int sq)
 {
     int open = pct_of(square_value(g, sq), AUCTION_OPEN_PCT);
 

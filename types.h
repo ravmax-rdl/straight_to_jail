@@ -388,8 +388,9 @@ void sell_property(GameState *g, int p, int sq);
 int  total_assets(const GameState *g, int p);
 
 /* finance.c -- auctions (LK 19-23, D23). anchorPlayer is whoever's turn
-   triggered it; bidding starts with the player after them. */
-int  auction_opening(const GameState *g, int sq);
+   triggered it; bidding starts with the player after them. The opening price
+   is internal: run_auction hands it to the first bidder as minBid, so no
+   strategy needs to compute it. */
 void run_auction(GameState *g, int sq, int anchorPlayer);
 void pay_income_tax(GameState *g, int p);
 void pay_community_fund(GameState *g, int p);
