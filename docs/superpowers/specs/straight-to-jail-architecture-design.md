@@ -134,7 +134,7 @@ typedef struct {                     /* one board square; property fields idle o
     bool hotel;
     bool mortgaged, loanLocked, damaged, structDamaged;
 
-    int  depreciationPct, conditionPct, unmaintainedRounds;
+    int  depreciationPct, cond[MAX_HOUSES];  /* LK 25: per BUILDING (D37)      */
     InsuranceType policy;
     int  policyRounds;
 } Square;

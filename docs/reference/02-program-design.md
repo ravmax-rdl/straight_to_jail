@@ -43,7 +43,7 @@ typedef struct {
     int  price, baseRent, houseCost, hotelCost, mortgageValue;
     int  owner, houses;
     bool hotel, mortgaged, loanLocked, damaged, structDamaged;
-    int  age, depreciationPct, conditionPct, unmaintainedRounds, closedRounds;
+    int  depreciationPct, cond[MAX_HOUSES];   /* LK 25: one rating per building */
     InsuranceType policy;
     int  policyRounds;
 } Square;

@@ -848,12 +848,23 @@ void condition_tick(GameState *g)
                 }
             }
         }
-        s->unmaintainedRounds++;
+        /* LK 28 needs no counter of its own: LK 25 already counts the
+           rounds for it. Condition falls 2% a round, so "more than 20
+           consecutive rounds" without restoration IS a condition below
+           60%, and the two can never disagree. The separate counter had
+           been reset by construction, which let a player hold off
+           structural damage indefinitely by laying another house.
 
-        /* LK 28. Announced once, on the round the limit is passed -- the
-           counter goes on climbing afterwards, so testing it without the
-           flag would reprint this every round for the rest of the game. */
-        if (s->unmaintainedRounds > UNMAINTAINED_LIMIT && !s->structDamaged) {
+           D37's average again, for the same reason it drives the rent
+           band: structDamaged is one flag with property-level
+           consequences, so it reads the property-level figure.
+
+           Announced once. The condition goes on falling afterwards, so
+           testing it without the flag would reprint every round; and only
+           LK 29's renovation clears the flag, never LK 27's upkeep --
+           maintenance keeps a sound building sound, it does not undo
+           damage already done to the fabric. */
+        if (avg_condition(s) < STRUCT_COND_PCT && !s->structDamaged) {
             s->structDamaged = true;
             printf("Structural damage has occurred at %s.\n", s->name);
             end_block();

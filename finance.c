@@ -842,7 +842,6 @@ static void reset_to_bank(Square *s)
     s->policyLap          = 0;
     s->policyWarned       = false;
     s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
-    s->unmaintainedRounds = 0;
     s->depreciationPct    = 0;
 }
 

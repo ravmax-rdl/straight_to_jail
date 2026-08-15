@@ -85,6 +85,10 @@
  *                     policy therefore lapses and is rebought like any
  *                     other. The reminder stands as section 5 shows it,
  *                     and the gap is the spec's, not an omission   [LK 9]
+ * D38 Struct. damage  LK 28 needs no counter: LK 25's 2%-a-round decay
+ *                     already counts, so "more than 20 rounds" IS a
+ *                     condition below 60%. Only LK 29's renovation clears
+ *                     it; LK 27 upkeep prevents, never undoes [LK 28, 29]
  * D37 Condition       LK 25 rates every BUILDING, so a property with four
  *                     houses has four ratings; Table 3 maps one. The
  *                     AVERAGE drives the band -- the spec is silent, it
@@ -238,7 +242,7 @@ typedef enum {
 #define DEPREC_CAP_PCT      30   /* LK 16                                    */
 #define DEPREC_EVERY         5   /* LK 16: one point per five rounds         */
 #define RENOVATE_PCT        10   /* LK 17: of current market value           */
-#define UNMAINTAINED_LIMIT  20   /* LK 28                                    */
+#define STRUCT_COND_PCT     60   /* LK 28 = 20 rounds of LK 25 decay          */
 #define STRUCT_VALUE_PCT   -15   /* LK 28: value penalty                     */
 #define STRUCT_RENT_PCT     75   /* LK 28: max rent, i.e. -25%               */
 #define STRUCT_MAINT_PCT    50   /* LK 28: upkeep costs half again           */
@@ -303,7 +307,6 @@ typedef struct {
        the four houses rather than joining them (Rule 10); otherwise
        cond[0..houses-1] are the houses in the order they were built. */
     int  cond[MAX_HOUSES];
-    int  unmaintainedRounds;      /* LK 28 counter                           */
 
     InsuranceType policy;
     int           policyLap;      /* D34: OWNER's lap count when bought      */
