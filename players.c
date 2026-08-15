@@ -21,6 +21,8 @@
  * the same function, so section 3 can be read against a table.
  */
 
+#include <limits.h>   /* INT_MAX, for the uncapped bid sentinel */
+
 #include "types.h"
 
 /* ------------------------------------------------------------- profiles -- */
@@ -32,8 +34,16 @@
  * Behaviour that is structural rather than scalar -- what a strategy buys,
  * how it banks -- cannot live here and is a switch further down.
  */
+/* R4.3 alone has no bid ceiling -- section 3.3 says the Risk Taker "bids
+   until available cash is exhausted", so LK 22's cash cap is its only limit.
+   A negative percentage says that outright; encoding it as some large
+   percentage would put a number that looks like a ceiling in a column of
+   real ones, and invite the reading that this player will pay ten times
+   market value. */
+#define BID_UNCAPPED (-1)
+
 typedef struct {
-    int  bidCapPct;          /* R4.*: ceiling on a bid, as % of value       */
+    int  bidCapPct;          /* R4.*: ceiling as % of value, or BID_UNCAPPED */
     int  maintainBelowPct;   /* R4.*: condition band that triggers upkeep   */
     int  renovateAbovePct;   /* R4.*: depreciation that triggers renovation */
     bool hotelsWhileIndebted;/* R4.2: no hotels while a loan is outstanding */
@@ -60,7 +70,7 @@ typedef struct {
 static const Profile PROFILE[] = {
     /* STRAT_AGGRESSIVE   */ { 120, 75, 10, true,  false, INS_BASIC, INS_COMPREHENSIVE },
     /* STRAT_CONSERVATIVE */ {  90, 90, 10, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
-    /* STRAT_RISKTAKER    */ { 999, 25, 30, true,  true,  INS_BASIC, INS_BUSINESS },
+    /* STRAT_RISKTAKER    */ { BID_UNCAPPED, 25, 30, true, true, INS_BASIC, INS_BUSINESS },
     /* STRAT_OPPORTUNIST  */ { 100, 75, 15, true,  false, INS_NONE,  INS_COMPREHENSIVE }
 };
 
@@ -389,11 +399,9 @@ static int bid_ceiling(GameState *g, int p, int sq)
         break;
 
     case STRAT_RISKTAKER:
-        /* R4.3: bids until its cash is gone. PROFILE carries a percentage
-           high enough that the ceiling never binds, leaving decide_bid's
-           cash test as the only thing that stops it -- which is exactly what
-           the bullet says. LK 22 caps the bid at cash regardless, so this
-           cannot bid money it does not have. */
+        /* R4.3: bids until its cash is gone, so there is no ceiling to
+           compute. LK 22 caps every bid at cash in run_auction regardless,
+           which is what actually stops it. */
         break;
 
     case STRAT_OPPORTUNIST:
@@ -411,6 +419,9 @@ static int bid_ceiling(GameState *g, int p, int sq)
         break;
     }
 
+    if (pct == BID_UNCAPPED) {
+        return INT_MAX;
+    }
     return pct_of(square_value(g, sq), pct);
 }
 
