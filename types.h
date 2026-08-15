@@ -64,9 +64,13 @@
  *                     basis, renovation, tax base, auction opening.
  *                     group base price -> mortgage value only, i.e. loan
  *                     capacity and debt-recovery proceeds
- * D19 One clock       everything counts game rounds. A loan matures at
- *                     issuedRound + 20; property age is
- *                     round - purchasedRound and starts at purchase
+ * D19 Age from buy    property age is round - purchasedRound and starts at
+ *                     purchase, never before                    [clarified]
+ * D34 Two clocks      SUPERSEDES D19's single clock. A SINGLE-PLAYER effect
+ *                     counts that player's own laps -- a loan matures 20 GO
+ *                     passes after issue, a policy lapses 20 after purchase,
+ *                     an App A card ages by its drawer. A GLOBAL effect and
+ *                     the 500-round limit count game rounds       [clarified]
  * D33 Taxes due     income tax is ASSESSED every round at 15% of cash and
  *                     COLLECTED on square 4; the balance stands in
  *                     taxesDue, which is what Rule 15 subtracts. The rate
@@ -271,15 +275,17 @@ typedef struct {
     int  unmaintainedRounds;      /* LK 28 counter                           */
 
     InsuranceType policy;
-    int           policyRounds;
+    int           policyLap;      /* D34: OWNER's lap count when bought      */
+    bool          policyWarned;   /* LK 9's reminder fires once              */
 } Square;
 
 typedef struct {
     bool active;
-    int  principal;               /* grows every round at ratePct            */
+    int  principal;               /* grows every GAME round at ratePct       */
     int  ratePct;                 /* frozen at issue -- LK 13                */
-    int  issuedRound;             /* D19: matures at issuedRound + termRounds */
-    int  termRounds;              /* 20, extended by the LK 5 extend action  */
+    int  issuedLap;               /* D34: the BORROWER's lap count at issue  */
+    int  termLaps;                /* 20 of the borrower's own laps, extended
+                                     by the LK 5 extend action               */
 } Loan;
 
 typedef struct {
@@ -288,6 +294,13 @@ typedef struct {
     int  cash, pos, jailTurns, taxesDue;
     bool bankrupt, jailed;
     bool passedGo;                /* D30: lapped since the round began       */
+    int  laps;                    /* D34: this player's own clock -- total
+                                     times they have passed GO. Single-player
+                                     effects are measured against this, not
+                                     against the game round                  */
+    int  lapsPrev;                /* laps at the start of the current round,
+                                     so the registry can age a player-scoped
+                                     effect by what that player actually did */
     bool sufferedLoss;            /* gates the Risk Taker's insurance, 3.3   */
     Loan loan;
 } Player;

@@ -517,8 +517,8 @@ void grant_loan(GameState *g, int p, int amount)
     pl->loan.active      = true;
     pl->loan.principal   = amount;
     pl->loan.ratePct     = rate;               /* LK 13: frozen for life   */
-    pl->loan.issuedRound = g->round;           /* D19: one clock           */
-    pl->loan.termRounds  = LOAN_ROUNDS;
+    pl->loan.issuedLap   = pl->laps;           /* D34: the borrower's own  */
+    pl->loan.termLaps  = LOAN_ROUNDS;
 
     credit(g, p, amount);
 }
@@ -550,7 +550,7 @@ void increase_loan(GameState *g, int p, int extra)
     printf("Collateral :\n");
     pledge_collateral(g, p, extra);
     printf("Interest Rate : %d%%\n", rate);
-    printf("Duration : %d Rounds\n", pl->loan.termRounds);
+    printf("Duration : %d Rounds\n", pl->loan.termLaps);
 
     /* Saturating add, for the reason D29 gives. money_round keeps the
        compounding in accrue_interest inside int's range by clamping at
@@ -579,9 +579,9 @@ void extend_loan(GameState *g, int p)
     if (!pl->loan.active) {
         return;
     }
-    pl->loan.termRounds += LOAN_ROUNDS;
+    pl->loan.termLaps += LOAN_ROUNDS;
     printf("%s extended the loan period.\n", pl->name);
-    printf("Duration : %d Rounds\n", pl->loan.termRounds);
+    printf("Duration : %d Rounds\n", pl->loan.termLaps);
 }
 
 /* LK 5's two repayment actions, part and full, which differ only in amount.
@@ -762,7 +762,8 @@ static void reset_to_bank(Square *s)
     s->damaged            = false;
     s->structDamaged      = false;
     s->policy             = INS_NONE;
-    s->policyRounds       = 0;
+    s->policyLap          = 0;
+    s->policyWarned       = false;
     s->conditionPct       = 100;
     s->unmaintainedRounds = 0;
     s->depreciationPct    = 0;
@@ -806,7 +807,7 @@ void check_loan_default(GameState *g)
         if (pl->bankrupt || !pl->loan.active) {
             continue;
         }
-        if (g->round < pl->loan.issuedRound + pl->loan.termRounds) {
+        if (pl->laps < pl->loan.issuedLap + pl->loan.termLaps) {
             continue;
         }
         if (pl->loan.principal <= 0) {
@@ -899,7 +900,8 @@ void buy_policy(GameState *g, int p, int sq, InsuranceType tier)
     }
 
     s->policy       = tier;
-    s->policyRounds = INS_ROUNDS;
+    s->policyLap    = g->players[p].laps;   /* D34: the owner's own clock  */
+    s->policyWarned = false;
 
     printf("%s Insurance purchased.\n", TIER_NAMES[tier]);
     printf("Property : %s\n", s->name);
@@ -919,19 +921,26 @@ void tick_insurance(GameState *g)
 
     for (i = 0; i < NUM_SQUARES; i++) {
         Square *s = &g->board[i];
+        int     left;
 
-        if (s->policy == INS_NONE) {
+        if (s->policy == INS_NONE || s->owner < 0) {
             continue;
         }
 
-        s->policyRounds--;
-        if (s->policyRounds == INS_WARN_ROUNDS) {
+        /* D34: a policy covers one property held by one player, so it ages
+           on that player's clock. Derived from the stored baseline rather
+           than counted down, so it cannot drift from the lap count it is
+           measured against. */
+        left = INS_ROUNDS - (g->players[s->owner].laps - s->policyLap);
+
+        if (left <= INS_WARN_ROUNDS && left > 0 && !s->policyWarned) {
+            s->policyWarned = true;
             printf("Insurance policy on %s expires in %d rounds.\n",
                    s->name, INS_WARN_ROUNDS);
         }
-        if (s->policyRounds <= 0) {
+        if (left <= 0) {
             s->policy       = INS_NONE;
-            s->policyRounds = 0;
+            s->policyWarned = false;
         }
     }
 }

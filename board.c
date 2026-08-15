@@ -925,6 +925,7 @@ void move_player(GameState *g, int p, int steps)
            a lap is complete, and there is no second definition to keep in
            step with it. */
         pl->passedGo = true;
+        pl->laps++;                  /* D34: this player's own clock        */
 
         pl->cash += GO_SALARY;
         printf("%s passed GO.\n", pl->name);

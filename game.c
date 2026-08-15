@@ -914,6 +914,7 @@ void play_round(GameState *g)
 
     for (i = 0; i < NUM_PLAYERS; i++) {
         g->players[i].passedGo = false;
+        g->players[i].lapsPrev = g->players[i].laps;   /* D34 baseline      */
     }
 
     while (!round_complete(g)) {

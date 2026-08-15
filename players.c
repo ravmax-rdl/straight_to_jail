@@ -722,7 +722,7 @@ static BankAction bank_aggressive(GameState *g, int p, int *amount)
             *amount = pl->loan.principal;
             return BANK_REPAY_FULL;              /* R4.1: only when 2x      */
         }
-        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+        if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
             return BANK_EXTEND;
         }
         return BANK_NONE;
@@ -804,7 +804,7 @@ static BankAction bank_risktaker(GameState *g, int p, int *amount)
             *amount = cap;
             return BANK_INCREASE;                /* R4.3: refinances often  */
         }
-        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+        if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
             return BANK_EXTEND;
         }
         return BANK_NONE;
@@ -837,7 +837,7 @@ static BankAction bank_opportunist(GameState *g, int p, int *amount)
             *amount = pl->loan.principal;
             return BANK_REPAY_FULL;
         }
-        if (g->round + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedRound + pl->loan.termRounds) {
+        if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
             return BANK_EXTEND;
         }
         return BANK_NONE;

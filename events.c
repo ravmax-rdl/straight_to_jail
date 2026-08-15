@@ -48,6 +48,16 @@ void effect_push(GameState *g, EffectKind kind, EffectScope scopeKind, int scope
 #endif
     }
 
+    /* D34. A player-scoped record ages by its owner's laps, and the tick at
+       the end of this round will subtract every lap the owner completed in
+       it -- including the ones before this record existed. Crediting those
+       back here makes it age only from the moment it was created, which is
+       the same courtesy the global records get from the tick running ahead
+       of the cadences. */
+    if (owner >= 0) {
+        rounds += g->players[owner].laps - g->players[owner].lapsPrev;
+    }
+
     e = &g->econ.effects[g->econ.effectCount++];
     e->kind         = kind;
     e->scopeKind    = (int)scopeKind;
@@ -172,9 +182,23 @@ void tick_effects(GameState *g)
     int i, kept = 0;
 
     for (i = 0; i < g->econ.effectCount; i++) {
-        Effect *e = &g->econ.effects[i];
+        Effect *e   = &g->econ.effects[i];
+        int     age = 1;
 
-        e->roundsLeft--;
+        /* D34. A record carrying an owner is that player's alone -- an
+           Appendix A card attaches to whoever drew it -- so it ages by what
+           that player actually did this round, not by the round itself. A
+           global record ages by one, the game round being its clock.
+           A bankrupt owner's records are dropped: their laps stop, and an
+           effect measured against a stopped clock would never expire. */
+        if (e->owner >= 0) {
+            if (g->players[e->owner].bankrupt) {
+                continue;
+            }
+            age = g->players[e->owner].laps - g->players[e->owner].lapsPrev;
+        }
+
+        e->roundsLeft -= age;
         if (e->roundsLeft > 0) {
             g->econ.effects[kept++] = *e;
         }
@@ -849,7 +873,7 @@ void fire_disaster(GameState *g)
 
     /* D20, before the block prints: the policy is spent. */
     s->policy       = INS_NONE;
-    s->policyRounds = 0;
+    s->policyWarned = false;
 
     credit(g, s->owner, payout);
     printf("Insurance Claim Approved.\n");
