@@ -689,6 +689,19 @@ static void assert_invariants(const GameState *g)
             abort();
         }
 
+        /* LK 11 ties damage to BUILDINGS: "damaged buildings cannot
+           collect rent". A bare lot carrying the flag is unrepairable --
+           D1 prices the work off the buildings standing, so the repair
+           costs nothing and restores nothing while the square goes on
+           earning no rent. Three paths empty a square and all three must
+           clear it; this is what stops a fourth appearing. */
+        if (g->board[i].damaged && !g->board[i].hotel &&
+            g->board[i].houses == 0) {
+            fprintf(stderr, "R%d: square %d is damaged with no buildings (LK 11)\n",
+                    g->round, i);
+            abort();
+        }
+
         /* A lock outliving its loan would silently sterilise an asset:
            eligible_collateral would refuse to pledge it and the D11 ladder
            would refuse to mortgage it, forever. Both ends that clear a loan

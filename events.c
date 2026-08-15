@@ -1105,8 +1105,25 @@ static int random_owned_square(GameState *g, int p)
 static void damage_square(GameState *g, int sq)
 {
     if (sq < 0) {
-        return;
+        return;                    /* nothing developed to strike   */
     }
+
+    /* Damage attaches to BUILDINGS, never to a bare lot. LK 11 is the
+       operative sentence -- "damaged buildings cannot collect rent" --
+       and LK 10 says the same from the other side, striking only
+       developed property. A vacant lot has nothing to damage and
+       nothing to repair: D1 prices repair off the buildings standing,
+       so admitting one produced a repair that cost nothing and
+       restored nothing. Both callers select developed squares; this
+       guard makes that a property of the function rather than of the
+       two call sites. */
+#ifdef DEBUG
+    if (!g->board[sq].hotel && g->board[sq].houses == 0) {
+        fprintf(stderr, "R%d: damage on undeveloped square %d\n", g->round, sq);
+        abort();
+    }
+#endif
+
     g->board[sq].damaged = true;
     printf("%s has been damaged.\n", g->board[sq].name);
 }
@@ -1138,7 +1155,7 @@ static void apply_card(GameState *g, int p, int card)
         effect_push(g, EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, +100, p, 5);
         break;
     case CARD_HEAVY_FLOODS:
-        damage_square(g, random_square_where(g, REGION_COASTAL, false));
+        damage_square(g, random_square_where(g, REGION_COASTAL, true));
         break;
     case CARD_POLITICAL_RALLY:
         sq = random_owned_square(g, p);

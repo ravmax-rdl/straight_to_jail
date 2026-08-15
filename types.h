@@ -14,7 +14,10 @@
  * lecturer's clarification set, which is later and authoritative.
  *
  * D1  Repair cost     50% of the current construction cost of the buildings
- *                     standing on the property                        [LK 10]
+ *                     standing on the property. Damage NEVER attaches to
+ *                     a bare lot: LK 11 ties it to buildings and LK 10
+ *                     strikes only developed property, so every path
+ *                     that empties a square clears it       [LK 10, 11]
  * D2' Income Tax      SUPERSEDES the PDF. 15% of the player's CURRENT CASH.
  *                     The rate is held in econ.incomeTaxPct, seeded at 15,
  *                     moved by inflation the way the loan rate is (D21),

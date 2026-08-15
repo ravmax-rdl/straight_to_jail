@@ -1060,6 +1060,17 @@ static void sell_one_building(GameState *g, int p, int sq)
         printf("%s sold a house on %s.\n", g->players[p].name, s->name);
     }
 
+    /* LK 11: damage belongs to the BUILDINGS, so selling the last one
+       takes the damage with it. Leaving the flag on a bare lot left a
+       square that could not collect rent and could not be repaired
+       either -- D1 prices repair off the buildings standing, and there
+       are none. reset_to_bank already clears it on the foreclosure and
+       bankruptcy paths; this is the one route that emptied a square
+       while its owner kept it. */
+    if (!s->hotel && s->houses == 0) {
+        s->damaged = false;
+    }
+
     credit(g, p, refund);
     printf("Received LKR %s.\n", fmt_lkr(b, refund));
     end_block();
