@@ -340,7 +340,6 @@ typedef struct {
     int  incomeTaxPct;            /* seeded at 15, inflation-adjusted, D2'   */
     int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
     int  lastBoomGroup, lastDeclineGroup;
-    int  activeRegulation;        /* -1 = none                               */
 
     /* The Table 4 card currently in force, and the round it was drawn. The
        LK 36 block must name it, and a name is the one thing an Effect record

@@ -56,9 +56,8 @@ bool game_init(GameState *g, const char *csvPath)
        by that reading rather than by an initialiser. */
     g->econ.incomeTaxPct = INCOME_TAX_PCT;
 
-    /* -1 is "none yet" for all three. GRP_NONE happens to be -1 too, which
+    /* -1 is "none yet" for all four. GRP_NONE happens to be -1 too, which
        is what makes the LK 30 consecutive-repeat check work on round 10. */
-    g->econ.activeRegulation  = -1;
     g->econ.activeEvent       = -1;
     g->econ.lastBoomGroup     = GRP_NONE;
     g->econ.lastDeclineGroup  = GRP_NONE;

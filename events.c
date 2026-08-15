@@ -752,10 +752,14 @@ static void levy_luxury_tax(GameState *g)
         due  = pct_of(base, 25);
 
         printf("%s is levied on %s.\n", g->players[s->owner].name, s->name);
+        /* Inside the branch that printed, for the reason pay_income_tax
+           gives: a failed charge hands over to the Rule 14 ladder, whose
+           own blocks carry the spacing, and terminating here as well put
+           a second blank after a bankruptcy's trailing auctions. */
         if (charge(g, s->owner, due, -1)) {
             printf("Luxury Tax Paid : LKR %s.\n", fmt_lkr(b, due));
+            end_block();
         }
-        end_block();
     }
 }
 
@@ -764,7 +768,6 @@ void government_regulation(GameState *g)
 {
     int idx = rng_range(0, REGULATION_COUNT - 1);
 
-    g->econ.activeRegulation = idx;
     fire_event(g, &REGULATIONS[idx], "Government Regulation", " Introduced.", -1, REGULATION_ROUNDS);
 
     if (idx == REG_LUXURY_TAX) {
