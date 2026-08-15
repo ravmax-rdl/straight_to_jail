@@ -741,11 +741,13 @@ void redeem_mortgage(GameState *g, int p, int sq)
 
 /* LK 4 and D4, once per round for every live loan.
  *
- * At the rate the loan was ISSUED at, never the current one -- LK 13 freezes
- * it, and Loan owning its own ratePct is what makes that correct by
- * construction rather than by everyone remembering. Milestone 4's inflation
- * moves econ.interestRatePct and this line does not notice, which is the
- * point.
+ * From the rate the loan was ISSUED at, never a fresh Table 9 reading -- LK 13
+ * freezes it, and Loan owning its own ratePct is what makes that correct by
+ * construction rather than by everyone remembering. Inflation reaches new
+ * loans by moving the prevailing condition, and this line cannot see it.
+ *
+ * The one thing that does move a live loan is D21's pair of economy-wide
+ * conditions; see the local below.
  */
 void accrue_interest(GameState *g)
 {
@@ -753,10 +755,21 @@ void accrue_interest(GameState *g)
 
     for (i = 0; i < NUM_PLAYERS; i++) {
         Player *pl = &g->players[i];
+        int     rate;
 
         if (pl->bankrupt || !pl->loan.active) {
             continue;
         }
+
+        /* D21. LK 13 freezes the issued rate for the loan's life, and Table 9
+           never revisits it -- the table chose the row at issue and is
+           finished. The two economy-wide conditions do still reach a live
+           loan: a recession makes an existing debt compound harder while it
+           lasts, a boom eases it. Read once per round because the modifier
+           cannot change between one lap and the next, and applied to a local
+           so the frozen rate stays frozen. */
+        rate = apply_pct(pl->loan.ratePct,
+                         effect_modifier(g, EFF_INTEREST_MUL, -1, i));
 
         /* D34: a loan is a single-player instrument, so it compounds on the
            borrower's clock -- once per lap they completed this round, not
@@ -772,7 +785,7 @@ void accrue_interest(GameState *g)
            and a player who laps twice is charged twice rather than being
            charged once at a rate raised to a power. */
         for (laps = pl->laps - pl->lapsPrev; laps > 0; laps--) {
-            pl->loan.principal = apply_pct(pl->loan.principal, pl->loan.ratePct);
+            pl->loan.principal = apply_pct(pl->loan.principal, rate);
         }
 
 #ifdef DEBUG
