@@ -456,7 +456,7 @@ static void renovate_step(GameState *g, int p, int sq)
         /* LK 29 restores value, rent and condition together, which is three
            fields because the three penalties are read in three places. */
         s->structDamaged      = false;
-        s->conditionPct       = 100;
+        s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
         s->unmaintainedRounds = 0;
 
         printf("%s rebuilt %s.\n", g->players[p].name, s->name);
@@ -478,7 +478,7 @@ static void renovate_step(GameState *g, int p, int sq)
        been standing unmaintained, and leaving the count to climb would
        hand LK 28 structural damage to a property just rebuilt. */
     s->depreciationPct    = 0;
-    s->conditionPct       = 100;
+    s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
     s->unmaintainedRounds = 0;
     s->purchasedRound     = g->round;   /* D19: the age resets with it     */
 
@@ -827,7 +827,10 @@ static void build_step(GameState *g, int p)
             end_block();
         }
 
-        s->conditionPct       = 100;    /* LK 25: new work begins sound      */
+        /* LK 25: only the NEW building begins sound. Restoring the whole
+           square handed every older house a free overhaul, so a player
+           who kept building never had to maintain anything. */
+        s->cond[s->hotel ? 0 : s->houses - 1] = 100;
         s->unmaintainedRounds = 0;
     }
 }
@@ -882,7 +885,9 @@ static void maintenance_step(GameState *g, int p)
             return;
         }
 
-        s->conditionPct       = 100;
+        /* maintenance_cost already charges per building -- house cost x
+           houses, or the hotel's -- so paying it restores all of them. */
+        s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
         s->unmaintainedRounds = 0;    /* LK 28's clock restarts             */
         printf("%s maintained %s.\n", g->players[p].name, s->name);
         printf("\n");

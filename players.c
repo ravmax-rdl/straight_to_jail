@@ -610,7 +610,7 @@ int decide_maintenance(GameState *g, int p)
         if (s->owner != p || development_level(g, i) == 0) {
             continue;
         }
-        if (s->conditionPct >= threshold) {
+        if (avg_condition(s) >= threshold) {
             continue;
         }
         if (g->players[p].cash < maintenance_cost(g, i)) {

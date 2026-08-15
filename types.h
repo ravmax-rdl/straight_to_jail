@@ -85,6 +85,10 @@
  *                     policy therefore lapses and is rebought like any
  *                     other. The reminder stands as section 5 shows it,
  *                     and the gap is the spec's, not an omission   [LK 9]
+ * D37 Condition       LK 25 rates every BUILDING, so a property with four
+ *                     houses has four ratings; Table 3 maps one. The
+ *                     AVERAGE drives the band -- the spec is silent, it
+ *                     was written as though there were one     [LK 25, 26]
  * D34 Two clocks      SUPERSEDES D19's single clock. A SINGLE-PLAYER effect
  *                     counts that player's own laps -- a loan matures 20 GO
  *                     passes after issue, a policy lapses 20 after purchase,
@@ -294,7 +298,11 @@ typedef struct {
     bool mortgaged, loanLocked, damaged, structDamaged;
 
     int  depreciationPct;         /* LK 16, capped at DEPREC_CAP_PCT         */
-    int  conditionPct;            /* LK 25, starts at 100                    */
+    /* LK 25: one Condition Rating per BUILDING, each starting at 100.
+       cond[0] is the hotel's while hotel is true, since a hotel replaces
+       the four houses rather than joining them (Rule 10); otherwise
+       cond[0..houses-1] are the houses in the order they were built. */
+    int  cond[MAX_HOUSES];
     int  unmaintainedRounds;      /* LK 28 counter                           */
 
     InsuranceType policy;
@@ -508,6 +516,7 @@ int building_cost(const GameState *g, int sq, bool hotel);
    rent bands are applied inside square_rent and read nowhere else. */
 void condition_tick(GameState *g);
 int  maintenance_cost(const GameState *g, int sq);
+int  avg_condition(const Square *s);
 int  repair_cost(const GameState *g, int sq);
 
 /* board.c -- ageing (LK 16-17). depreciation_tick runs on the five-round

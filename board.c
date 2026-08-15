@@ -435,7 +435,7 @@ bool board_init(GameState *g, const char *csvPath)
            and D19 derives age from this field. */
         s->owner          = -1;
         s->purchasedRound = -1;
-        s->conditionPct   = 100;    /* LK 25: buildings begin sound          */
+        s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
         s->policy         = INS_NONE;
 
         if (s->type == SQ_PROPERTY) {
@@ -782,6 +782,31 @@ int repair_cost(const GameState *g, int sq)
  * The bottom band is LK 26's Closed: below 25% the building collects nothing
  * at all, which is why this returns 0 rather than some small percentage.
  */
+/* D37: Table 3 maps ONE condition to one rent percentage, but LK 25 gives
+ * every building its own rating, so a property with four houses has four.
+ * The average is what the band reads. The spec never says which -- it was
+ * written as though a property had a single rating -- and the average is
+ * the only reading under which maintaining some of the buildings helps
+ * some of the rent, which is what LK 27's "any number of buildings"
+ * contemplates. Worst-of would make one neglected house close the whole
+ * property; best-of would make three of them free.
+ *
+ * 100 with nothing standing is never read: square_rent guards on
+ * development_level, and a vacant lot collects its full base rent.
+ */
+int avg_condition(const Square *s)
+{
+    int i, n = s->hotel ? 1 : s->houses, total = 0;
+
+    if (n <= 0) {
+        return 100;
+    }
+    for (i = 0; i < n; i++) {
+        total += s->cond[i];
+    }
+    return total / n;
+}
+
 static int condition_rent_pct(int conditionPct)
 {
     if (conditionPct >= 90) { return 100; }
@@ -810,9 +835,18 @@ void condition_tick(GameState *g)
             continue;
         }
 
-        s->conditionPct -= COND_DECAY_PCT;
-        if (s->conditionPct < 0) {
-            s->conditionPct = 0;
+        /* LK 25: every building ages on its own clock. Sharing one rating
+           meant a house built in round 40 aged as though it had stood
+           since round 3 -- or, worse, restored the ones that had. */
+        {
+            int k, n = s->hotel ? 1 : s->houses;
+
+            for (k = 0; k < n; k++) {
+                s->cond[k] -= COND_DECAY_PCT;
+                if (s->cond[k] < 0) {
+                    s->cond[k] = 0;
+                }
+            }
         }
         s->unmaintainedRounds++;
 
@@ -880,7 +914,7 @@ int square_rent(const GameState *g, int sq, int diceTotal)
            what the property actually earns, not what it would earn if it
            were maintained. */
         if (development_level(g, sq) > 0) {
-            rent = pct_of(rent, condition_rent_pct(s->conditionPct));
+            rent = pct_of(rent, condition_rent_pct(avg_condition(s)));
         }
         /* LK 28's second consequence, a cap on what the building can earn,
            applied after the condition band because both describe the same

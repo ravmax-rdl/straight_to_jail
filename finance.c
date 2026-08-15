@@ -841,7 +841,7 @@ static void reset_to_bank(Square *s)
     s->policy             = INS_NONE;
     s->policyLap          = 0;
     s->policyWarned       = false;
-    s->conditionPct       = 100;
+    s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
     s->unmaintainedRounds = 0;
     s->depreciationPct    = 0;
 }
@@ -1075,6 +1075,11 @@ static void sell_one_building(GameState *g, int p, int sq)
     int     refund = demolition_refund(g, sq);
 
     if (s->hotel) {
+        /* Rule 10 backwards. The four houses that reappear are the same
+           fabric the hotel was, so they inherit its rating rather than
+           arriving new -- otherwise building a hotel and selling it back
+           would be the cheapest overhaul on the board. */
+        s->cond[1] = s->cond[2] = s->cond[3] = s->cond[0];
         s->hotel  = false;
         s->houses = MAX_HOUSES;
         printf("%s sold the hotel on %s.\n", g->players[p].name, s->name);
