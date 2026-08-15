@@ -995,19 +995,13 @@ int net_worth(const GameState *g, int p)
             total += building_cost(g, i, false) * s->houses;
         }
 
-        /* A mortgage is money already drawn against the square, so it comes
-           straight back off. Rule 15's "- loans" names the LK 1-7 advance
-           and says nothing about mortgages, but they are the same instrument
-           at a different desk -- cash advanced against an asset the player
-           keeps and still shows at full market value above. Omitting it
-           makes mortgaging RAISE a player's net worth, and a balance sheet
-           in which borrowing improves your position is arithmetically wrong
-           before it is unfaithful to anything. Seed 42 had a player showing
-           65,879 with nine of ten properties mortgaged and the tenth
-           pledged. */
-        if (s->mortgaged) {
-            total -= mortgage_value(g, i);
-        }
+        /* No mortgage term. D28 settles which of the spec's two statements
+           of net worth governs, and it is Rule 15's: the intro paragraph
+           lists "outstanding loans, and mortgage liabilities" while Rule 15
+           itself gives the formula without any mortgage term. Rule 15 is the
+           numbered rule and wins. The consequence is real and intended --
+           a mortgaged square is still carried at full market value here, so
+           mortgaging raises the reported figure by the cash it releases. */
     }
 
     /* Rule 15's liabilities. Accrued interest needs no term of its own:

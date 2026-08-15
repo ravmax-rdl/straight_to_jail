@@ -119,11 +119,17 @@ loan terms and policy life 20, depreciation from age 50.
 
 Two known limitations, both documented rather than hidden:
 
-- **A mortgage cannot be lifted.** The spec defines mortgaging as a debt-recovery step (**D11**)
-  and never gives a redemption price, so a mortgaged property stays mortgaged: it collects no
-  rent and bars its colour group from development for the rest of the game. This makes the
-  recovery ladder a one-way door and is the main reason the most cash-stressed personality
-  struggles to reach hotels.
+- **A mortgage cannot be lifted.** A mortgage and a loan are separate instruments in the rules
+  — Rule-LK 3 has loan-locked collateral "continue earning rent" and bars it from being
+  "additionally mortgaged", while Rule 7 stops a *mortgaged* property earning at all — but the
+  spec never prices redemption. So a mortgaged property stays mortgaged: no rent, and its colour
+  group barred from development for the rest of the game. This makes the D11 recovery ladder a
+  one-way door and is the main reason the most cash-stressed personality struggles to reach
+  hotels.
+- **Net worth follows Rule 15, not the introduction.** The spec states net worth twice and the
+  two disagree; Rule 15's formula carries no mortgage term (decision **D28**). A mortgaged
+  square is therefore still counted at full market value, so mortgaging raises the reported
+  figure by the cash it releases.
 - **§5 names its boomed groups regionally** ("Southern Province"), while **R3.21** and Rule-LK
   30–33 are explicit that a *colour group* booms. The block's format is reproduced exactly; the
   names printed are the board's own groups.
