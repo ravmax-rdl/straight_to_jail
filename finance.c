@@ -794,15 +794,12 @@ static const int PREMIUM_PCT[] = {
     0, INS_BASIC_PCT, INS_COMPREHENSIVE_PCT, INS_BUSINESS_PCT
 };
 
-/* Section 1.2's tier names, for the purchase block. */
+/* Section 1.2's tier names, for the purchase block. Kept static: buy_policy
+   below is the only place a tier is ever named in output, and an accessor
+   exposing this to other modules had no callers. */
 static const char *TIER_NAMES[] = {
     "None", "Basic", "Comprehensive", "Business Interruption"
 };
-
-const char *insurance_name(InsuranceType tier)
-{
-    return TIER_NAMES[tier];
-}
 
 /* Appendix E: 5%, 10% or 15% of the property's CURRENT value, then LK 24's
  * Insurance Regulation and Heavy Monsoon through EFF_PREMIUM_MUL.

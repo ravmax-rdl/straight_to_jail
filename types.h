@@ -371,7 +371,6 @@ bool charge(GameState *g, int p, int amt, int toPlayer);
 int  premium(const GameState *g, int sq, InsuranceType tier);
 void buy_policy(GameState *g, int p, int sq, InsuranceType tier);
 void tick_insurance(GameState *g);
-const char *insurance_name(InsuranceType tier);
 
 /* finance.c -- Rule 11's debt recovery and Rule 14's bankruptcy (D11).
    raise_funds is called by charge and by nothing else; creditor is -1 when
