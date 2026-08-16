@@ -912,8 +912,19 @@ void play_turn(GameState *g, int p)
 
     move_player(g, p, total);                       /* 3. move clockwise  */
     land_on(g, p, g->players[p].pos, total);        /* 4. landing action  */
+    /* Rule 3 lists construction sixth and financial transactions seventh,
+       and these run the other way round on purpose. 3.3 has the Risk Taker
+       "sell lower-value properties to finance premium developments", and
+       decide_liquidate only sells when a development shortfall exists --
+       so a sale placed after construction funds nothing this turn, and the
+       bullet describes a transaction that never happens. The proceeds have
+       to be in hand before the building is priced.
+
+       Rule 3's list is what a turn contains rather than a barrier between
+       its parts; maintenance already sits ahead of the roll for the same
+       kind of reason, LK 27 tying it to the beginning of the turn. */
+    liquidate_step(g, p);                           /* 7, ahead of 6      */
     build_step(g, p);                               /* 6. construction    */
-    liquidate_step(g, p);                           /* 7. financial       */
 
 #ifdef DEBUG
     assert_invariants(g);

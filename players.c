@@ -231,6 +231,18 @@ static int development_shortfall(const GameState *g, int p)
  * which creates more development than it defers, so it is never declined on
  * these grounds.
  */
+/* The two squares 3.1 names outright: "prioritizes acquiring premium
+   properties such as Galle Face and Nuwara Eliya". Board indices rather
+   than names, because Rent.csv can rename a property but Table 1 fixes
+   where it sits. */
+#define SQ_IDX_NUWARA_ELIYA 37
+#define SQ_IDX_GALLE_FACE   39
+
+static bool covets(int sq)
+{
+    return sq == SQ_IDX_GALLE_FACE || sq == SQ_IDX_NUWARA_ELIYA;
+}
+
 static bool buy_aggressive(GameState *g, int p, int sq)
 {
     int price = purchase_price(g, sq);
@@ -239,7 +251,13 @@ static bool buy_aggressive(GameState *g, int p, int sq)
     if (!rent_still_payable(g, p) || cash < price) {
         return false;
     }
-    if (completes_group(g, p, sq)) {
+    /* Two exemptions from the development reserve, and they are the two
+       bullets 3.1 states as priorities: a square that completes a group
+       creates more development than it defers, and the premium squares the
+       rule names are wanted for their own sake. Both used to live in the
+       bid ceiling, which cost 3.1 its flat 120%; a priority belongs in what
+       the player is willing to BUY, not in what it will pay. */
+    if (completes_group(g, p, sq) || covets(sq)) {
         return true;
     }
 
@@ -256,13 +274,26 @@ static bool buy_aggressive(GameState *g, int p, int sq)
  * restricts it to board-wide effects, which is what "recession" means -- a
  * single group in decline is a bargain, not a recession.
  */
+/* 3.2's "avoids investments during economic recessions", as one test three
+ * decisions read: purchasing, bidding and building.
+ *
+ * Board-wide, which is what separates a recession from a sale. LK 32 puts a
+ * single colour group into decline and that is a bargain, not a slump -- so
+ * the read is at square -1, which admits only global and player-scoped
+ * records. Economic Recession is the LK 18 event that satisfies it.
+ */
+static bool in_recession(const GameState *g, int p)
+{
+    return effect_modifier(g, EFF_VALUE_MUL, -1, p) < 0;
+}
+
 static bool buy_conservative(GameState *g, int p, int sq)
 {
     int price = purchase_price(g, sq);
     int cash  = g->players[p].cash;
 
-    if (effect_modifier(g, EFF_VALUE_MUL, -1, p) < 0) {
-        return false;                            /* R4.2: not in a slump    */
+    if (in_recession(g, p)) {
+        return false;                            /* 3.2: not in a slump     */
     }
 
     /* R4.2: buys only if at least half the cash survives the purchase --
@@ -370,16 +401,6 @@ bool decide_buy(GameState *g, int p, int sq)
  * follow, which is D9's reading of section 3: the ceiling is the personality,
  * the increment is the rule.
  */
-/* The two squares R4.1 names outright. Board indices rather than names
-   because Rent.csv can rename a property but Table 1 fixes where it sits. */
-#define SQ_IDX_NUWARA_ELIYA 37
-#define SQ_IDX_GALLE_FACE   39
-
-static bool covets(int sq)
-{
-    return sq == SQ_IDX_GALLE_FACE || sq == SQ_IDX_NUWARA_ELIYA;
-}
-
 /* How far this personality will follow an auction, as a percentage of market
  * value. PROFILE holds the ceiling; the switch is for personalities whose
  * appetite depends on which square is under the hammer.
@@ -390,14 +411,14 @@ static int bid_ceiling(GameState *g, int p, int sq)
 
     switch (g->players[p].strat) {
     case STRAT_AGGRESSIVE:
-        /* R4.1: D9's 120% is the ceiling it will ever reach, and it reaches
-           it for the squares the bullet names -- one that completes a group,
-           or Galle Face and Nuwara Eliya. Anything else it takes at market
-           and no higher, which is what makes "completes groups first" and
-           "covets" observable rather than decorative. */
-        if (!completes_group(g, p, sq) && !covets(sq)) {
-            pct = 100;
-        }
+        /* 3.1 states one figure and states it flatly: "bids aggressively
+           until the property reaches 120% of its estimated market value".
+           Holding ordinary squares to 100% and reserving 120% for the ones
+           it completes a group with, or covets by name, made two other
+           bullets observable at the cost of contradicting this one. Those
+           two are expressed where they belong instead -- completes_group
+           already exempts a group-completing square from the development
+           reserve in buy_aggressive. */
         break;
 
     case STRAT_RISKTAKER:
@@ -435,6 +456,14 @@ int decide_bid(GameState *g, int p, int sq, int minBid)
        the Anti-Speculation cap gates the auction exactly as it gates the
        purchase. Bidding here was the way round it. */
     if (!purchase_permitted(g, p, sq)) {
+        return 0;
+    }
+
+    /* 3.2 avoids INVESTMENTS during a recession, and an auction is one.
+       Guarding only the direct purchase left the same acquisition
+       available one square later at a price the bullet was written to
+       keep this player away from. */
+    if (g->players[p].strat == STRAT_CONSERVATIVE && in_recession(g, p)) {
         return 0;
     }
 
@@ -479,8 +508,14 @@ static bool wants_to_build(GameState *g, int p, int sq, bool hotel)
     }
 
     switch (g->players[p].strat) {
-    case STRAT_AGGRESSIVE:
     case STRAT_CONSERVATIVE:
+        /* 3.2 again. Construction is the largest investment on the board,
+           so a bullet that stops this player buying during a recession
+           cannot leave it building through one. Below the Anti-Speculation
+           cap, which is checked above and outranks every preference. */
+        return !in_recession(g, p);
+
+    case STRAT_AGGRESSIVE:
     case STRAT_RISKTAKER:
         return true;
 
