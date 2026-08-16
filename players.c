@@ -45,7 +45,8 @@
 typedef struct {
     int  bidCapPct;          /* R4.*: ceiling as % of value, or BID_UNCAPPED */
     int  maintainBelowPct;   /* R4.*: condition band that triggers upkeep   */
-    int  renovateAbovePct;   /* R4.*: depreciation that triggers renovation */
+    int  renovateAbovePct;   /* 3.*: depreciation that triggers renovation, */
+                             /* tested strictly, so 29 fires at LK 16's cap */
     int  bailBelowPct;       /* Rule 13: bail paid when it costs no more    */
     bool hotelsWhileIndebted;/* R4.2: no hotels while a loan is outstanding */
     bool insureOnlyAfterLoss;/* R4.3: insures only after suffering one      */
@@ -71,7 +72,7 @@ typedef struct {
 static const Profile PROFILE[] = {
     /* STRAT_AGGRESSIVE   */ { 120, 75, 10, 100, true,  false, INS_BASIC, INS_COMPREHENSIVE },
     /* STRAT_CONSERVATIVE */ {  90, 90, 10,   0, false, false, INS_COMPREHENSIVE, INS_COMPREHENSIVE },
-    /* STRAT_RISKTAKER    */ { BID_UNCAPPED, 25, 30, 100, true, true, INS_BASIC, INS_BUSINESS },
+    /* STRAT_RISKTAKER    */ { BID_UNCAPPED, 25, 29, 100, true, true, INS_BASIC, INS_BUSINESS },
     /* STRAT_OPPORTUNIST  */ { 100, 75, 15,  10, true,  false, INS_NONE,  INS_COMPREHENSIVE }
 };
 
@@ -789,6 +790,11 @@ bool decide_renovate(GameState *g, int p, int sq)
         return g->players[p].cash >= structural_renovation_cost(g, sq);
     }
 
+    /* Strict, so a threshold equal to LK 16's 30% cap can never be met --
+       the tick stops at 30 and nothing exceeds it. 3.3's "ignores property
+       depreciation until repair becomes unavoidable" therefore reads as 29:
+       the Risk Taker renovates only once the wear has run out of room, which
+       is the point at which it stops being avoidable. */
     if (s->depreciationPct <= profile(g, p)->renovateAbovePct) {
         return false;
     }
