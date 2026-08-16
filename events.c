@@ -396,6 +396,16 @@ static int market_group(const GameState *g, bool boom, int *magnitudePct, int *r
         if (e->kind != EFF_VALUE_MUL || e->scopeKind != SCOPE_GROUP) {
             continue;
         }
+        /* Board-wide only. Appendix A's Property Revaluation is also a
+           group-scoped VALUE_MUL -- +15% for 15 rounds -- but it carries an
+           owner and reaches that player's holdings alone, where LK 31's boom
+           is +20% for 10 and reaches everyone. Matching on shape alone
+           reported the card as a Market Boom in 52 of 71 blocks, and when a
+           real decline was running on the same colour the block named that
+           group twice with opposite signs. A card is not a market state. */
+        if (e->owner >= 0) {
+            continue;
+        }
         if ((e->magnitudePct > 0) != boom) {
             continue;
         }

@@ -515,7 +515,19 @@ static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
     printf("%s landed on %s.\n", g->players[p].name, s->name);
     printf("\n");
 
-    /* No else branch. charge now runs the D11 ladder and prints Rule 14's
+    /* Announced BEFORE the charge when the cash will not cover it, because
+       from here the D11 ladder takes over and may end in Rule 14 -- and a
+       bankruptcy block that never names the debt that caused it leaves the
+       reader with a player eliminated by an unstated number. On the ordinary
+       path nothing changes: the section 5 template still prints once, after
+       the money has moved. */
+    if (g->players[p].cash < rent) {
+        printf("Rent Due : LKR %s.\n", fmt_lkr(b, rent));
+        printf("Owner : %s.\n", g->players[s->owner].name);
+        end_block();
+    }
+
+    /* No else branch. charge runs the D11 ladder and prints Rule 14's
        bankruptcy block if the ladder cannot save the payer, by which point
        the creditor has already received whatever was left. */
     if (charge(g, p, rent, s->owner)) {

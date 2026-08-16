@@ -873,6 +873,7 @@ void check_loan_default(GameState *g)
 
     for (i = 0; i < NUM_PLAYERS; i++) {
         Player *pl = &g->players[i];
+        char    b[FMT_BUF];
         int     foreclosed[NUM_SQUARES];
         int     n = 0, k, sq;
 
@@ -893,6 +894,14 @@ void check_loan_default(GameState *g)
         printf("Collateral has been foreclosed.\n");
         printf("\n");
         printf("Outstanding debt cleared.\n");
+        printf("\n");
+        /* Appended rather than interleaved: section 5 templates three lines
+           here and no figure, so the template stays consecutive and this
+           follows it. Without the balance the block states that a debt was
+           written off and never says how much -- and the last summary before
+           it is already stale, LK 4 having compounded once more in the same
+           scheduler pass before the default check ran. */
+        printf("Amount Written Off : LKR %s.\n", fmt_lkr(b, pl->loan.principal));
         end_block();
 
         for (sq = 0; sq < NUM_SQUARES; sq++) {
