@@ -59,49 +59,49 @@ typedef struct {
     SquareType    type;
     const char   *name;
     PropertyGroup group;
-    unsigned      regions;
+    int           regions;
 } SquareLayout;
 
 static const SquareLayout LAYOUT[NUM_SQUARES] = {
-/*  0 */ { SQ_GO,        "GO",                                       GRP_NONE,      0u },
+/*  0 */ { SQ_GO,        "GO",                                       GRP_NONE,      0 },
 /*  1 */ { SQ_PROPERTY,  "Pettah",                                   GRP_BROWN,     REGION_WESTERN | REGION_COMMERCIAL },
-/*  2 */ { SQ_COMMUNITY, "Community Development Fund",               GRP_NONE,      0u },
+/*  2 */ { SQ_COMMUNITY, "Community Development Fund",               GRP_NONE,      0 },
 /*  3 */ { SQ_PROPERTY,  "Maradana",                                 GRP_BROWN,     REGION_WESTERN | REGION_COMMERCIAL },
-/*  4 */ { SQ_TAX,       "Income Tax",                               GRP_NONE,      0u },
+/*  4 */ { SQ_TAX,       "Income Tax",                               GRP_NONE,      0 },
 /*  5 */ { SQ_RAILWAY,   "Colombo Fort Railway Station",             GRP_NONE,      REGION_COMMERCIAL },
 /*  6 */ { SQ_PROPERTY,  "Bambalapitiya",                            GRP_LIGHTBLUE, REGION_WESTERN | REGION_COASTAL },
-/*  7 */ { SQ_EVENT,     "National Event Card",                      GRP_NONE,      0u },
+/*  7 */ { SQ_EVENT,     "National Event Card",                      GRP_NONE,      0 },
 /*  8 */ { SQ_PROPERTY,  "Wellawatte",                               GRP_LIGHTBLUE, REGION_WESTERN | REGION_COASTAL },
 /*  9 */ { SQ_PROPERTY,  "Mount Lavinia",                            GRP_LIGHTBLUE, REGION_WESTERN | REGION_COASTAL },
-/* 10 */ { SQ_JAIL,      "Jail / Just Visiting",                     GRP_NONE,      0u },
+/* 10 */ { SQ_JAIL,      "Jail / Just Visiting",                     GRP_NONE,      0 },
 /* 11 */ { SQ_PROPERTY,  "Nugegoda",                                 GRP_PINK,      REGION_WESTERN },
-/* 12 */ { SQ_UTILITY,   "Ceylon Electricity Board",                 GRP_NONE,      0u },
+/* 12 */ { SQ_UTILITY,   "Ceylon Electricity Board",                 GRP_NONE,      0 },
 /* 13 */ { SQ_PROPERTY,  "Maharagama",                               GRP_PINK,      REGION_WESTERN },
 /* 14 */ { SQ_PROPERTY,  "Kottawa",                                  GRP_PINK,      REGION_WESTERN },
 /* 15 */ { SQ_RAILWAY,   "Kandy Railway Station",                    GRP_NONE,      REGION_COMMERCIAL },
 /* 16 */ { SQ_PROPERTY,  "Negombo",                                  GRP_ORANGE,    REGION_WESTERN | REGION_COASTAL },
-/* 17 */ { SQ_INSURANCE, "Sri Lanka Insurance",                      GRP_NONE,      0u },
+/* 17 */ { SQ_INSURANCE, "Sri Lanka Insurance",                      GRP_NONE,      0 },
 /* 18 */ { SQ_PROPERTY,  "Katunayake",                               GRP_ORANGE,    REGION_WESTERN },
 /* 19 */ { SQ_PROPERTY,  "Ja-Ela",                                   GRP_ORANGE,    REGION_WESTERN },
-/* 20 */ { SQ_PARKING,   "Free Parking",                             GRP_NONE,      0u },
+/* 20 */ { SQ_PARKING,   "Free Parking",                             GRP_NONE,      0 },
 /* 21 */ { SQ_PROPERTY,  "Kandy City",                               GRP_RED,       REGION_CENTRAL },
-/* 22 */ { SQ_EVENT,     "National Event Card",                      GRP_NONE,      0u },
+/* 22 */ { SQ_EVENT,     "National Event Card",                      GRP_NONE,      0 },
 /* 23 */ { SQ_PROPERTY,  "Peradeniya",                               GRP_RED,       REGION_CENTRAL },
 /* 24 */ { SQ_PROPERTY,  "Katugastota",                              GRP_RED,       REGION_CENTRAL },
 /* 25 */ { SQ_RAILWAY,   "Galle Railway Station",                    GRP_NONE,      REGION_COMMERCIAL },
 /* 26 */ { SQ_PROPERTY,  "Galle Fort",                               GRP_YELLOW,    REGION_SOUTHERN_COASTAL | REGION_COASTAL | REGION_NWSDB_ADJACENT },
 /* 27 */ { SQ_PROPERTY,  "Unawatuna",                                GRP_YELLOW,    REGION_SOUTHERN_COASTAL | REGION_COASTAL | REGION_NWSDB_ADJACENT },
-/* 28 */ { SQ_UTILITY,   "National Water Supply and Drainage Board", GRP_NONE,      0u },
+/* 28 */ { SQ_UTILITY,   "National Water Supply and Drainage Board", GRP_NONE,      0 },
 /* 29 */ { SQ_PROPERTY,  "Hikkaduwa",                                GRP_YELLOW,    REGION_SOUTHERN_COASTAL | REGION_COASTAL | REGION_NWSDB_ADJACENT },
-/* 30 */ { SQ_GOTOJAIL,  "Go To Jail",                               GRP_NONE,      0u },
+/* 30 */ { SQ_GOTOJAIL,  "Go To Jail",                               GRP_NONE,      0 },
 /* 31 */ { SQ_PROPERTY,  "Jaffna Town",                              GRP_GREEN,     REGION_NORTHERN },
 /* 32 */ { SQ_PROPERTY,  "Nallur",                                   GRP_GREEN,     REGION_NORTHERN },
-/* 33 */ { SQ_INSURANCE, "Ceylinco Insurance",                       GRP_NONE,      0u },
+/* 33 */ { SQ_INSURANCE, "Ceylinco Insurance",                       GRP_NONE,      0 },
 /* 34 */ { SQ_PROPERTY,  "Trincomalee",                              GRP_GREEN,     REGION_NORTHERN | REGION_EASTERN | REGION_COASTAL },
 /* 35 */ { SQ_RAILWAY,   "Jaffna Railway Station",                   GRP_NONE,      REGION_COMMERCIAL },
-/* 36 */ { SQ_EVENT,     "National Event Card",                      GRP_NONE,      0u },
+/* 36 */ { SQ_EVENT,     "National Event Card",                      GRP_NONE,      0 },
 /* 37 */ { SQ_PROPERTY,  "Nuwara Eliya",                             GRP_DARKBLUE,  REGION_CENTRAL },
-/* 38 */ { SQ_BANK,      "Bank of Ceylon",                           GRP_NONE,      0u },
+/* 38 */ { SQ_BANK,      "Bank of Ceylon",                           GRP_NONE,      0 },
 /* 39 */ { SQ_PROPERTY,  "Galle Face",                               GRP_DARKBLUE,  REGION_WESTERN | REGION_COMMERCIAL }
 };
 
@@ -170,7 +170,7 @@ static const char *CSV_CANDIDATES[] = {
     "Rent.csv",
     "../assets/Rent.csv"
 };
-#define CSV_CANDIDATE_COUNT ((int)(sizeof CSV_CANDIDATES / sizeof CSV_CANDIDATES[0]))
+#define CSV_CANDIDATE_COUNT COUNT_OF(CSV_CANDIDATES)
 
 /* Drop the line terminator. The file may arrive with either ending: it was
    authored on Windows, while .gitattributes normalises to LF on checkout, so
@@ -771,6 +771,7 @@ int building_cost(const GameState *g, int sq, bool hotel)
 {
     const Square *s    = &g->board[sq];
     int           cost = hotel ? s->hotelCost : s->houseCost;
+    int           mul  = effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner);
 
     /* Appendix B prices houses and hotels in separate columns, which is
        what makes "house construction cost" a quantity a rule can name --
@@ -780,17 +781,14 @@ int building_cost(const GameState *g, int sq, bool hotel)
        house-only kind therefore reaches this only when a house is being
        priced; a subsidy that discounted hotels too was giving away a
        column the rule never mentioned. */
-    {
-        int mul = effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner);
-
-        if (!hotel) {
-            mul += effect_modifier(g, EFF_HOUSE_COST_MUL, sq, s->owner);
-        }
-        /* Summed, not chained: LK 34 makes concurrent percentages
-           cumulative, so a -30% subsidy under a +10% boom prices a house
-           at -20% of base rather than at 0.7 x 1.1 (D40). */
-        return apply_pct(cost, mul);
+    if (!hotel) {
+        mul += effect_modifier(g, EFF_HOUSE_COST_MUL, sq, s->owner);
     }
+
+    /* Summed, not chained: LK 34 makes concurrent percentages cumulative,
+       so a -30% subsidy under a +10% boom prices a house at -20% of base
+       rather than at 0.7 x 1.1 (D40). */
+    return apply_pct(cost, mul);
 }
 
 /* LK 27: the cost of restoring one property to 100% condition -- 5% of
@@ -917,7 +915,7 @@ static int condition_rent_pct(int conditionPct)
  */
 void condition_tick(GameState *g)
 {
-    int i;
+    int i, k, standing;
 
     for (i = 0; i < NUM_SQUARES; i++) {
         Square *s = &g->board[i];
@@ -929,14 +927,11 @@ void condition_tick(GameState *g)
         /* LK 25: every building ages on its own clock. Sharing one rating
            meant a house built in round 40 aged as though it had stood
            since round 3 -- or, worse, restored the ones that had. */
-        {
-            int k, n = s->hotel ? 1 : s->houses;
-
-            for (k = 0; k < n; k++) {
-                s->cond[k] -= COND_DECAY_PCT;
-                if (s->cond[k] < 0) {
-                    s->cond[k] = 0;
-                }
+        standing = s->hotel ? 1 : s->houses;
+        for (k = 0; k < standing; k++) {
+            s->cond[k] -= COND_DECAY_PCT;
+            if (s->cond[k] < 0) {
+                s->cond[k] = 0;
             }
         }
         /* LK 28 needs no counter of its own: LK 25 already counts the

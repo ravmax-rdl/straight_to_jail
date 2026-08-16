@@ -83,7 +83,7 @@ static bool scope_matches(const GameState *g, const Effect *e, int square, int p
     case SCOPE_GROUP:
         return square >= 0 && g->board[square].group == (PropertyGroup)e->scope;
     case SCOPE_REGION:
-        return square >= 0 && (g->board[square].regions & (unsigned)e->scope) != 0u;
+        return square >= 0 && (g->board[square].regions & e->scope) != 0;
     case SCOPE_SQUARE:
         return square >= 0 && square == e->scope;
     case SCOPE_PLAYER:
@@ -228,7 +228,7 @@ void tick_cooldowns(GameState *g)
    because the set is not an interval -- it skips 1, 3, 4 and everything
    between 8 and 12 -- and because it can be checked against the rule by eye. */
 static const int INFLATION_DRAWS[] = { -3, 0, 2, 5, 8, 12 };
-#define INFLATION_DRAW_COUNT ((int)(sizeof INFLATION_DRAWS / sizeof INFLATION_DRAWS[0]))
+#define INFLATION_DRAW_COUNT COUNT_OF(INFLATION_DRAWS)
 
 /* LK 12-14 and D12's permanent half.
  *
@@ -295,7 +295,7 @@ static const struct { EffectKind kind; int pct; } BOOM_EFFECTS[] = {
     { EFF_MORTGAGE_MUL, +15 },
     { EFF_BUILD_COST_MUL, +10 }
 };
-#define BOOM_EFFECT_COUNT ((int)(sizeof BOOM_EFFECTS / sizeof BOOM_EFFECTS[0]))
+#define BOOM_EFFECT_COUNT COUNT_OF(BOOM_EFFECTS)
 
 static const struct { EffectKind kind; int pct; } DECLINE_EFFECTS[] = {
     { EFF_VALUE_MUL,        -15 },
@@ -303,7 +303,7 @@ static const struct { EffectKind kind; int pct; } DECLINE_EFFECTS[] = {
     { EFF_MORTGAGE_MUL,     -10 },
     { EFF_AUCTION_OPEN_MUL, -25 }
 };
-#define DECLINE_EFFECT_COUNT ((int)(sizeof DECLINE_EFFECTS / sizeof DECLINE_EFFECTS[0]))
+#define DECLINE_EFFECT_COUNT COUNT_OF(DECLINE_EFFECTS)
 
 /* Pick a group that LK 33's cooldown allows, that LK 30 did not give this
  * same treatment last review, and that is not already spoken for this review.
@@ -452,7 +452,7 @@ static const EconomicEvent NATIONAL_EVENTS[] = {
     { "Tourism Boom",
       "Southern Province properties increase in value by 15%.",
       { { EFF_HOTEL_RENT_MUL, SCOPE_GLOBAL, 0, +100 },
-        { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_SOUTHERN_COASTAL, +15 } }, 2 },
+        { EFF_VALUE_MUL, SCOPE_REGION, REGION_SOUTHERN_COASTAL, +15 } }, 2 },
 
     { "Fuel Crisis",
       "Railway rents double and construction costs rise by 20%.",
@@ -462,7 +462,7 @@ static const EconomicEvent NATIONAL_EVENTS[] = {
     { "Heavy Monsoon",
       "Coastal property values fall by 10% and premiums rise by 20%.",
       { { EFF_PREMIUM_MUL, SCOPE_GLOBAL, 0, +20 },
-        { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COASTAL, -10 },
+        { EFF_VALUE_MUL, SCOPE_REGION, REGION_COASTAL, -10 },
         { EFF_FLOOD_RISK, SCOPE_GLOBAL, 0, +100 } }, 3 },
 
     { "Economic Recession",
@@ -482,14 +482,14 @@ static const EconomicEvent NATIONAL_EVENTS[] = {
 
     { "Foreign Investment",
       "Commercial property values rise by 20%.",
-      { { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COMMERCIAL, +20 } }, 1 },
+      { { EFF_VALUE_MUL, SCOPE_REGION, REGION_COMMERCIAL, +20 } }, 1 },
 
     { "Political Unrest",
       "Hotel rents fall by half.",
       { { EFF_HOTEL_RENT_MUL, SCOPE_GLOBAL, 0, -50 },
         { EFF_RIOT_RISK, SCOPE_GLOBAL, 0, +100 } }, 2 }
 };
-#define NATIONAL_EVENT_COUNT ((int)(sizeof NATIONAL_EVENTS / sizeof NATIONAL_EVENTS[0]))
+#define NATIONAL_EVENT_COUNT COUNT_OF(NATIONAL_EVENTS)
 
 /* D21 keys Table 9 on two of these by identity. Named here, beside the table
    they index, with a DEBUG check in national_event that the rows have not
@@ -581,10 +581,10 @@ static const EconomicEvent REGIONAL_CARDS[] = {
         { EFF_VALUE_MUL, SCOPE_SQUARE, 21, +20 } }, 2 },
 
     { "Beach Pollution", "Southern coastal rents fall by 30%.",
-      { { EFF_RENT_MUL, SCOPE_REGION, (int)REGION_SOUTHERN_COASTAL, -30 } }, 1 },
+      { { EFF_RENT_MUL, SCOPE_REGION, REGION_SOUTHERN_COASTAL, -30 } }, 1 },
 
     { "Flood Damage", "Coastal values fall by 20%.",
-      { { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COASTAL, -20 } }, 1 },
+      { { EFF_VALUE_MUL, SCOPE_REGION, REGION_COASTAL, -20 } }, 1 },
 
     { "Transport Strike", "Railway rents fall by 40%.",
       { { EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, -40 } }, 1 },
@@ -594,9 +594,9 @@ static const EconomicEvent REGIONAL_CARDS[] = {
 
     { "Water Shortage", "Water board rents rise while nearby values fall.",
       { { EFF_UTILITY_RENT_MUL, SCOPE_SQUARE, 28, +20 },
-        { EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_NWSDB_ADJACENT, -10 } }, 2 }
+        { EFF_VALUE_MUL, SCOPE_REGION, REGION_NWSDB_ADJACENT, -10 } }, 2 }
 };
-#define REGIONAL_CARD_COUNT ((int)(sizeof REGIONAL_CARDS / sizeof REGIONAL_CARDS[0]))
+#define REGIONAL_CARD_COUNT COUNT_OF(REGIONAL_CARDS)
 
 /* Push a row's whole effect list and print its three-line announcement.
  *
@@ -725,7 +725,7 @@ static const EconomicEvent REGULATIONS[] = {
     { "Anti-Speculation Act", "No player may hold more than three undeveloped properties.",
       { { EFF_MAX_PROPERTIES, SCOPE_GLOBAL, 0, ANTI_SPEC_CAP } }, 1 }
 };
-#define REGULATION_COUNT ((int)(sizeof REGULATIONS / sizeof REGULATIONS[0]))
+#define REGULATION_COUNT COUNT_OF(REGULATIONS)
 
 /* D24 REVISED. LK 24 calls this tax annual and gives no cadence to work
  * from, and this used to charge every hotel on the board once, the moment
@@ -789,7 +789,7 @@ void government_regulation(GameState *g)
 }
 
 /* Pick a square that matches a predicate over the whole board, or -1. */
-static int random_square_where(GameState *g, unsigned regionMask, bool developedOnly)
+static int random_square_where(GameState *g, int regionMask, bool developedOnly)
 {
     int i, pick = -1, seen = 0;
 
@@ -799,7 +799,7 @@ static int random_square_where(GameState *g, unsigned regionMask, bool developed
         if (s->owner < 0) {
             continue;
         }
-        if (regionMask != 0u && (s->regions & regionMask) == 0u) {
+        if (regionMask != 0 && (s->regions & regionMask) == 0) {
             continue;
         }
         if (developedOnly && development_level(g, i) == 0) {
@@ -872,34 +872,39 @@ static int covers(InsuranceType tier, Disaster peril, bool isHotel)
  */
 static Disaster pick_peril(const GameState *g)
 {
-    int weight[DIS_COUNT];
-    int i, total = 0, roll;
+    int  weight[DIS_COUNT];
+    bool doubled[DIS_COUNT];
+    int  i, k = 0, total = 0, roll;
+
+    for (i = 0; i < DIS_COUNT; i++) {
+        doubled[i] = false;
+    }
+    if (effect_modifier(g, EFF_FLOOD_RISK, -1, -1) > 0) {
+        doubled[DIS_FLOOD] = true;
+        k++;
+    }
+    if (effect_modifier(g, EFF_RIOT_RISK, -1, -1) > 0) {
+        doubled[DIS_RIOT] = true;
+        k++;
+    }
 
     /* "Riot probability doubles" is a statement about the PROBABILITY, and a
        probability cannot be doubled by raising one weight alone: with five
        perils at equal weight, doubling the riot weight moves it from 20% to
        33% because the other four keep theirs. The rest have to give up the
        difference. For k doubled perils out of n, weights of 2*(n-k) against
-       (n-2k) put each doubled peril at exactly 2/n. */
-    {
-        bool dbl[DIS_COUNT];
-        int  k = 0;
+       (n-2k) put each doubled peril at exactly 2/n.
 
-        for (i = 0; i < DIS_COUNT; i++) {
-            dbl[i] = false;
-        }
-        if (effect_modifier(g, EFF_FLOOD_RISK, -1, -1) > 0) {
-            dbl[DIS_FLOOD] = true;
-            k++;
-        }
-        if (effect_modifier(g, EFF_RIOT_RISK, -1, -1) > 0) {
-            dbl[DIS_RIOT] = true;
-            k++;
-        }
-        for (i = 0; i < DIS_COUNT; i++) {
-            weight[i] = (k > 0 && DIS_COUNT > 2 * k)
-                        ? (dbl[i] ? 2 * (DIS_COUNT - k) : DIS_COUNT - 2 * k)
-                        : 1;
+       That only works while n > 2k, i.e. while there is something left for
+       the others to give. Nothing doubled, or too much doubled, falls back
+       to equal weights. */
+    for (i = 0; i < DIS_COUNT; i++) {
+        if (k == 0 || DIS_COUNT <= 2 * k) {
+            weight[i] = 1;
+        } else if (doubled[i]) {
+            weight[i] = 2 * (DIS_COUNT - k);
+        } else {
+            weight[i] = DIS_COUNT - 2 * k;
         }
     }
 
@@ -985,7 +990,7 @@ static void settle_claim(GameState *g, int sq, Disaster peril)
  */
 void fire_disaster(GameState *g)
 {
-    int      sq = random_square_where(g, 0u, true);
+    int      sq = random_square_where(g, 0, true);
     Square  *s;
     Disaster peril;
 
@@ -1254,7 +1259,7 @@ static void apply_card(GameState *g, int p, int card)
         effect_push(g, EFF_UTILITY_RENT_MUL, SCOPE_GLOBAL, 0, -50, p, 3);
         break;
     case CARD_FOREIGN_FUNDING:
-        effect_push(g, EFF_VALUE_MUL, SCOPE_REGION, (int)REGION_COMMERCIAL, +15, p,
+        effect_push(g, EFF_VALUE_MUL, SCOPE_REGION, REGION_COMMERCIAL, +15, p,
                     CARD_ROUNDS);
         break;
     case CARD_PORT_EXPANSION:
@@ -1297,7 +1302,7 @@ static void apply_card(GameState *g, int p, int card)
                fmt_lkr(b, CARD_GRANT_AMOUNT));
         break;
     case CARD_NATIONAL_DISASTER:
-        damage_square(g, random_square_where(g, 0u, true), pick_peril(g));
+        damage_square(g, random_square_where(g, 0, true), pick_peril(g));
         break;
     case CARD_COUNT:
         break;

@@ -239,16 +239,22 @@ typedef enum {
 
 /* D14 region tags. A bitmask rather than an enum because a square belongs to
    several regions at once -- Trincomalee is northern, eastern and coastal. */
-#define REGION_WESTERN          0x01u
-#define REGION_CENTRAL          0x02u
-#define REGION_SOUTHERN_COASTAL 0x04u
-#define REGION_NORTHERN         0x08u
-#define REGION_EASTERN          0x10u
-#define REGION_COMMERCIAL       0x20u
-#define REGION_NWSDB_ADJACENT   0x40u
-#define REGION_COASTAL          0x80u
+#define REGION_WESTERN          0x01
+#define REGION_CENTRAL          0x02
+#define REGION_SOUTHERN_COASTAL 0x04
+#define REGION_NORTHERN         0x08
+#define REGION_EASTERN          0x10
+#define REGION_COMMERCIAL       0x20
+#define REGION_NWSDB_ADJACENT   0x40
+#define REGION_COASTAL          0x80
 
 /* ------------------------------------------------------------ constants -- */
+
+/* How many entries a compiled-in table has. Only valid on a real array --
+   on a pointer it silently measures the pointer instead, so never hand it a
+   function parameter. The (int) keeps it out of signed/unsigned comparisons
+   with the loop counters that read these tables. */
+#define COUNT_OF(a) ((int)(sizeof (a) / sizeof (a)[0]))
 
 #define NUM_SQUARES         40
 #define NUM_PLAYERS          4
@@ -324,7 +330,7 @@ typedef struct {
     SquareType    type;
     const char   *name;
     PropertyGroup group;          /* GRP_NONE for non-properties             */
-    unsigned      regions;        /* REGION_* bitmask, D14                   */
+    int           regions;        /* REGION_* bitmask, D14                   */
 
     /* Permanent-adjusted stored values. Only inflation mutates these (D12).
        D18: price and baseRent are INDIVIDUAL, from Rent.csv. mortgageValue,
