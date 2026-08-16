@@ -19,10 +19,10 @@
  *                     strikes only developed property, so every path
  *                     that empties a square clears it       [LK 10, 11]
  * D2' Income Tax      SUPERSEDES the PDF. 15% of the player's CURRENT CASH.
- *                     The rate is held in econ.incomeTaxPct, seeded at 15,
- *                     moved by inflation the way the loan rate is (D21),
- *                     and further scaled at charge time by EFF_TAX_MUL --
- *                     x1.5 under Increase Property Tax          [Rule 11]
+ *                     charged the moment they land on square 4 and never
+ *                     accrued. The 15% does not drift -- LK 13's inflation
+ *                     list omits income tax -- but LK 24's Increase
+ *                     Property Tax scales it x1.5, as it says   [Rule 11]
  * D3  Coverage        Basic {Fire,Flood} @80%; Comprehensive
  *                     {Fire,Flood,Riot,Vandalism} @100%; Business
  *                     Interruption all perils @100% + 5 rounds of hotel
@@ -120,10 +120,10 @@
  *                     passes after issue, a policy lapses 20 after purchase,
  *                     an App A card ages by its drawer. A GLOBAL effect and
  *                     the 500-round limit count game rounds       [clarified]
- * D33 Taxes due     income tax is ASSESSED every round at 15% of cash and
- *                     COLLECTED on square 4; the balance stands in
- *                     taxesDue, which is what Rule 15 subtracts. The rate
- *                     fluctuates with inflation and LK 24        [Rule 11, 15]
+ * D33 Taxes due       REVERTED. There is no accrued tax and no Taxes Due:
+ *                     Rule 11 makes landing the whole event, so a tax
+ *                     charged on arrival is never outstanding. Rule 15's
+ *                     term is dead and the field is gone     [Rule 11, 15]
  * D32 Selling        section 3 requires it and names no price: sold to the
  *                     Bank at current square_value, buildings down first
  *                     at D11's 50%. Never breaks a developed group [sec. 3]
@@ -148,8 +148,10 @@
  *                     value first, whose 75% LTV covers the amount
  * D23 Auction order   starts with the player immediately after the current
  *                     player, then clockwise. The decliner may bid
- * D24 Luxury tax      charged once when the regulation activates, at 25%
- *                     of each hotel property's value including buildings
+ * D24 Luxury tax      REVISED. Charged where a tax is charged -- on the tax
+ *                     square, to the player who lands, while the regulation
+ *                     is in force -- at 25% of each of that player's hotel
+ *                     properties INCLUDING its buildings        [LK 24]
  * D25 Anti-Spec. Act  REVISED. The cap counts OWNED undeveloped COLOUR
  *                     properties, so it gates auctions as well as direct
  *                     purchases -- how a square arrives is irrelevant.
@@ -206,6 +208,7 @@ typedef enum {
     EFF_PREMIUM_MUL, EFF_MORTGAGE_MUL,
     EFF_AUCTION_OPEN_MUL, EFF_INTEREST_MUL, EFF_INTEREST_ADD, EFF_TAX_MUL,
     EFF_CLOSED, EFF_CONSTRUCTION_SUSPENDED, EFF_MAX_PROPERTIES,
+    EFF_LUXURY_TAX,
     EFF_FLOOD_RISK, EFF_RIOT_RISK,
     EFF_KIND_COUNT
 } EffectKind;
@@ -256,7 +259,7 @@ typedef enum {
 #define BI_RENT_ROUNDS       5   /* D3: Business Interruption's lost rent    */
 #define REPAIR_PCT          50   /* D1: of the buildings' construction cost  */
 #define MAX_HOUSES           4   /* Rule 9                                   */
-#define INCOME_TAX_PCT      15   /* D2': of cash, seeds econ.incomeTaxPct    */
+#define INCOME_TAX_PCT      15   /* D2': of cash, at the moment of landing   */
 #define COMMUNITY_PCT       10   /* D16: of total property assets            */
 #define COND_DECAY_PCT       2   /* LK 25                                    */
 #define MAINT_HOUSE_PCT      5   /* LK 27: per house, of construction cost   */
@@ -348,7 +351,7 @@ typedef struct {
 typedef struct {
     const char *name;
     Strategy    strat;
-    int  cash, pos, jailTurns, taxesDue;
+    int  cash, pos, jailTurns;
     bool bankrupt, jailed;
     bool passedGo;                /* D30: lapped since the round began       */
     int  laps;                    /* D34: this player's own clock -- total
@@ -386,7 +389,6 @@ typedef struct {
 
 typedef struct {
     int  inflationPct;            /* most recent draw, for the LK 36 block   */
-    int  incomeTaxPct;            /* seeded at 15, inflation-adjusted, D2'   */
     int  groupCooldown[GRP_COUNT];/* LK 33: 30-round bar on re-selection     */
     int  lastBoomGroup, lastDeclineGroup;
 
@@ -474,11 +476,6 @@ void sell_property(GameState *g, int p, int sq);
    assets), so deliberately two functions rather than one parameterised. */
 int  total_assets(const GameState *g, int p);
 
-/* finance.c -- D33. Income tax is ASSESSED every round into Player.taxesDue
-   and COLLECTED when the player lands on square 4. The rate is
-   econ.incomeTaxPct, which drifts with inflation (D2', D21) and is scaled at
-   assessment time by EFF_TAX_MUL. */
-void accrue_income_tax(GameState *g);
 
 /* finance.c -- auctions (LK 19-23, D23). anchorPlayer is whoever's turn
    triggered it; bidding starts with the player after them. The opening price
@@ -571,6 +568,12 @@ void market_review(GameState *g);
 void national_event(GameState *g);
 void regional_card(GameState *g);
 void government_regulation(GameState *g);
+
+/* LK 24's Luxury Property Tax, charged where a tax is charged: on the tax
+   square, to the player who landed, while the regulation is in force. 25% of
+   each hotel property's value INCLUDING its buildings -- the hotel is the
+   luxury being taxed, so square_value alone would miss it. */
+void levy_luxury_tax(GameState *g, int p);
 
 /* events.c -- LK 10-11. fire_disaster strikes one developed property every
    ten rounds; auto_repairs runs every round, so damage pauses a building's

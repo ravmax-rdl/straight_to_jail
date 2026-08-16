@@ -148,79 +148,37 @@ int total_assets(const GameState *g, int p)
  * Banker's whole plan.
  */
 
-/* Rule 11 as the clarification restates it (D2'): 15% of the player's
- * CURRENT CASH, not of a fixed sum and not of their assets.
+/* Rule 11 as D2' restates it: 15% of the player's CURRENT CASH, charged the
+ * moment they land and not before.
  *
- * The rate lives in econ.incomeTaxPct so that milestone 4's inflation can
- * move it the same way it moves the loan rate (D21). EFF_TAX_MUL scales it
- * again at charge time -- x1.5 while the Increase Property Tax regulation is
- * active.
+ * There is no accrued balance and no "taxes due". An earlier reading assessed
+ * the tax every round into a running total that square 4 then settled, which
+ * gave Rule 15 a Taxes Due term to subtract -- but Rule 11 makes landing the
+ * whole of the event, and a tax that is charged on arrival is never
+ * outstanding. The term is dead and the field is gone.
+ *
+ * The 15% does not drift. LK 13 lists what inflation modifies -- prices,
+ * building and hotel costs, rents, premiums, repair costs, loan interest --
+ * and income tax is not among them. The one thing that does move it is LK
+ * 24's Increase Property Tax, which says so outright ("Income Tax increases
+ * by 50%"), and that arrives as EFF_TAX_MUL. Square is -1 because a tax
+ * belongs to the player, not to the square they are standing on.
  */
-/* D33: income tax is ASSESSED every round and COLLECTED at square 4.
- *
- * Rule 11 makes landing the moment of payment, and D2' fixes the charge at
- * 15% of current cash -- but neither says the liability begins there, and
- * Rule 15 subtracts "Taxes Due" from net worth, a term that has to describe
- * something. A tax that existed only during the instant of landing could
- * never be due, so the assessment is what accrues and the square is where
- * the bill is settled.
- *
- * Square is -1 for the EFF_TAX_MUL read because an assessment belongs to the
- * player rather than to wherever they happen to be standing; only global and
- * player-scoped records reach it, which is what LK 24's Increase Property Tax
- * is.
- *
- * The add saturates for the reason D29 gives -- taxesDue is the second figure
- * in the program that only ever grows, and a player who avoids square 4 for
- * long enough would otherwise overflow it.
- */
-void accrue_income_tax(GameState *g)
-{
-    int i;
-
-    for (i = 0; i < NUM_PLAYERS; i++) {
-        Player *pl = &g->players[i];
-        int     rate, due;
-
-        if (pl->bankrupt) {
-            continue;
-        }
-
-        rate = apply_pct(g->econ.incomeTaxPct,
-                         effect_modifier(g, EFF_TAX_MUL, -1, i));
-        due  = pct_of(pl->cash, rate);
-
-        if (due <= 0) {
-            continue;
-        }
-        if (pl->taxesDue > INT_MAX - due) {
-            pl->taxesDue = INT_MAX;
-        } else {
-            pl->taxesDue += due;
-        }
-    }
-}
-
-/* Rule 11: landing on square 4 settles whatever has accrued, immediately.
- * A player who has just been assessed and lands the same round pays that
- * assessment; one who has avoided the square for ten rounds pays ten. */
 void pay_income_tax(GameState *g, int p)
 {
     char b[FMT_BUF];
-    int  due = g->players[p].taxesDue;
+    int  rate = apply_pct(INCOME_TAX_PCT,
+                          effect_modifier(g, EFF_TAX_MUL, -1, p));
+    int  due  = pct_of(g->players[p].cash, rate);
 
     printf("%s landed on Income Tax.\n", g->players[p].name);
 
     if (due <= 0) {
-        printf("No tax is outstanding.\n");
+        printf("No tax is payable.\n");
         end_block();
+        levy_luxury_tax(g, p);
         return;
     }
-
-    /* Cleared before the charge, not after. charge may run the D11 ladder and
-       end in Rule 14, and a bankrupt player must not carry a tax bill out of
-       the game with them -- declare_bankrupt settles what is left. */
-    g->players[p].taxesDue = 0;
 
     /* No else branch: charge runs the D11 ladder and, failing that, prints
        Rule 14's bankruptcy block itself. A "cannot pay" line here would only
@@ -230,6 +188,10 @@ void pay_income_tax(GameState *g, int p)
         printf("Remaining Balance : LKR %s.\n", fmt_lkr(b, g->players[p].cash));
         end_block();
     }
+
+    /* LK 24's Luxury Property Tax is levied on this square too, while the
+       regulation is in force -- the tax square is where a tax is paid. */
+    levy_luxury_tax(g, p);
 }
 
 /* D16/D17. Square 2 is a Community Development Fund square, not a card
@@ -1032,12 +994,12 @@ void tick_insurance(GameState *g)
 
         if (left <= INS_WARN_ROUNDS && left > 0 && !s->policyWarned) {
             s->policyWarned = true;
-            /* left, not INS_WARN_ROUNDS: the guard admits 3, 2 or 1, and
-               a player who laps twice in a round skips a value. Printing
-               the threshold told 2 of 53 warnings that three rounds
-               remained when one or two did. */
+            /* LK 9 states the notice, not a countdown: "players receive
+               renewal reminders three rounds before expiry". The figure is
+               therefore the rule's, printed as section 5 shows it, and does
+               not track a remaining count that the rule never mentions. */
             printf("Insurance policy on %s expires in %d rounds.\n",
-                   s->name, left);
+                   s->name, INS_WARN_ROUNDS);
             end_block();
         }
         if (left <= 0) {
@@ -1304,7 +1266,6 @@ int net_worth(const GameState *g, int p)
        rather than assumed, since milestone 4's regulations may defer one.
        Claims receivable is permanently 0 by D15. */
     total -= g->players[p].loan.principal;
-    total -= g->players[p].taxesDue;
 
     return total;
 }

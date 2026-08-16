@@ -269,7 +269,6 @@ void draw_inflation(GameState *g)
        Moderate and High rows rather than by scaling a stored figure. LK 13's
        "existing loan rates remain unchanged" is still what makes Loan own its
        own frozen ratePct -- this line could never reach it either. */
-    g->econ.incomeTaxPct = apply_pct(g->econ.incomeTaxPct, pct);
 
     /* Section 5 gives no template; this matches the economic-event voice of
        its neighbours. */
@@ -712,7 +711,7 @@ static const EconomicEvent REGULATIONS[] = {
     /* D24: charged once on activation, not a standing modifier at all. The
        zero effect count is what says so. */
     { "Luxury Property Tax", "Hotel properties are levied 25% of their value.",
-      { { EFF_VALUE_MUL, SCOPE_GLOBAL, 0, 0 } }, 0 },
+      { { EFF_LUXURY_TAX, SCOPE_GLOBAL, 0, 0 } }, 1 },
 
     { "Railway Modernization", "Railway rents rise by 25%.",
       { { EFF_RAILWAY_RENT_MUL, SCOPE_GLOBAL, 0, +25 } }, 1 },
@@ -727,7 +726,6 @@ static const EconomicEvent REGULATIONS[] = {
       { { EFF_MAX_PROPERTIES, SCOPE_GLOBAL, 0, ANTI_SPEC_CAP } }, 1 }
 };
 #define REGULATION_COUNT ((int)(sizeof REGULATIONS / sizeof REGULATIONS[0]))
-#define REG_LUXURY_TAX 3
 
 /* D24. LK 24 calls this tax annual but gives no per-round cadence to work
  * from, unlike LK 4, which is why D4 could take that rule literally and this
@@ -738,16 +736,20 @@ static const EconomicEvent REGULATIONS[] = {
  * reading under which "luxury" means anything -- a hotel is the luxury being
  * taxed, and square_value alone would ignore it.
  */
-static void levy_luxury_tax(GameState *g)
+void levy_luxury_tax(GameState *g, int p)
 {
     char b[FMT_BUF];
     int  sq;
+
+    if (!effect_active(g, EFF_LUXURY_TAX, -1, p)) {
+        return;
+    }
 
     for (sq = 0; sq < NUM_SQUARES; sq++) {
         const Square *s = &g->board[sq];
         int           base, due;
 
-        if (!s->hotel || s->owner < 0) {
+        if (!s->hotel || s->owner != p) {
             continue;
         }
 
@@ -773,9 +775,6 @@ void government_regulation(GameState *g)
 
     fire_event(g, &REGULATIONS[idx], "Government Regulation", " Introduced.", -1, REGULATION_ROUNDS);
 
-    if (idx == REG_LUXURY_TAX) {
-        levy_luxury_tax(g);
-    }
 }
 
 /* Pick a square that matches a predicate over the whole board, or -1. */

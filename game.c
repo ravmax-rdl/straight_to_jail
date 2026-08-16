@@ -50,12 +50,6 @@ bool game_init(GameState *g, const char *csvPath)
         g->order[i] = i;            /* replaced by determine_order          */
     }
 
-    /* D2'. The tax rate drifts from here with inflation. The loan rate needs
-       no seed: D21 derives it from the prevailing condition, and a game that
-       opens with no event and no inflation draw is Table 9's Stable Economy
-       by that reading rather than by an initialiser. */
-    g->econ.incomeTaxPct = INCOME_TAX_PCT;
-
     /* -1 is "none yet" for all four. GRP_NONE happens to be -1 too, which
        is what makes the LK 30 consecutive-repeat check work on round 10. */
     g->econ.activeEvent       = -1;
@@ -1007,7 +1001,6 @@ void play_round(GameState *g)
        LK 4 compounds first, so a loan defaults on the round its balance
        finally outgrows its term rather than a round later. */
     accrue_interest(g);             /* LK 4, D4                            */
-    accrue_income_tax(g);           /* D33: assessed here, collected at sq 4 */
     check_loan_default(g);          /* LK 6-7                              */
     condition_tick(g);              /* LK 25: buildings age by the round   */
     tick_insurance(g);              /* LK 9: policies lapse and warn       */

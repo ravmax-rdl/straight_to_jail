@@ -248,6 +248,41 @@ static int property_square_named(const char *name)
     return -1;
 }
 
+/* Split a line on commas WITHOUT folding runs of them, and return the true
+ * field count -- including empties, and including a trailing one.
+ *
+ * strtok cannot be used here and the reason is easy to miss: it treats a
+ * run of delimiters as a single separator, so "Brown,Pettah,1500,100,"
+ * yields four tokens for five fields and passed a four-field check, and
+ * "Brown,,Pettah,1500" yields three. CSV fields are positional -- an empty
+ * one is a field, not an absence -- so the count check only means anything
+ * if the split preserves them.
+ *
+ * Fields beyond max are counted but not stored, which is what lets the
+ * caller report an over-long row rather than overrun the array.
+ */
+static int split_csv(char *line, char *field[], int max)
+{
+    char *p = line;
+    int   n = 0;
+
+    for (;;) {
+        char *comma = strchr(p, ',');
+
+        if (comma != NULL) {
+            *comma = '\0';
+        }
+        if (n < max) {
+            field[n] = trim(p);
+        }
+        n++;
+        if (comma == NULL) {
+            return n;
+        }
+        p = comma + 1;
+    }
+}
+
 static FILE *open_rent_csv(const char *override, const char **usedPath)
 {
     FILE *f;
@@ -309,8 +344,7 @@ static bool load_rent_csv(GameState *g, const char *override)
 
     while (fgets(line, (int)sizeof line, f) != NULL) {
         char         *field[CSV_FIELDS];
-        char         *tok;
-        int           n = 0;
+        int           n;
         int           sq, price, baseRent;
         PropertyGroup grp;
 
@@ -320,20 +354,17 @@ static bool load_rent_csv(GameState *g, const char *override)
         if (line[0] == '\0') {
             continue;                                   /* blank line       */
         }
-        if (lineNo == 1 && strncmp(line, "Property Group", 14) == 0) {
-            continue;                                   /* header row       */
+        n = split_csv(line, field, CSV_FIELDS);
+
+        /* The header is recognised by its first field EXACTLY and by the
+           row being the right width. Matching a 14-character prefix of the
+           whole line accepted "Property Groupsomething" and any number of
+           columns after it. */
+        if (lineNo == 1 && n == CSV_FIELDS &&
+            strcmp(field[0], "Property Group") == 0) {
+            continue;
         }
 
-        /* Count every field, not just the first four, so both a short row
-           and an over-long one are caught. strtok would fold two adjacent
-           commas into one delimiter and silently shorten the row; the count
-           check is what turns that into a reported error. */
-        for (tok = strtok(line, ","); tok != NULL; tok = strtok(NULL, ",")) {
-            if (n < CSV_FIELDS) {
-                field[n] = trim(tok);
-            }
-            n++;
-        }
         if (n != CSV_FIELDS) {
             fprintf(stderr, "straight_to_jail: %s:%d: expected %d fields, found %d\n",
                     path, lineNo, CSV_FIELDS, n);
@@ -391,12 +422,14 @@ static bool load_rent_csv(GameState *g, const char *override)
     if (loaded != NUM_PROPERTIES) {
         for (i = 0; i < NUM_SQUARES; i++) {
             if (LAYOUT[i].type == SQ_PROPERTY && g->board[i].price <= 0) {
-                fprintf(stderr, "straight_to_jail: %s: no row for \"%s\" (square %d)\n",
-                        path, LAYOUT[i].name, i);
+                fprintf(stderr, "straight_to_jail: %s:%d: no row for \"%s\" (square %d)\n",
+                        path, lineNo, LAYOUT[i].name, i);
             }
         }
-        fprintf(stderr, "straight_to_jail: %s: read %d properties, expected %d\n",
-                path, loaded, NUM_PROPERTIES);
+        /* The line number is the last one read: the fault is that the file
+           ENDED here still short, so end-of-file is where it is reported. */
+        fprintf(stderr, "straight_to_jail: %s:%d: read %d properties, expected %d\n",
+                path, lineNo, loaded, NUM_PROPERTIES);
         return false;
     }
 
