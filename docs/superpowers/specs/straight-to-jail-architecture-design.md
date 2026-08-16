@@ -160,8 +160,8 @@ typedef struct {
 } Player;
 
 typedef struct {                     /* a single timed modifier — see §5               */
-    EffectKind kind;
-    int  scopeKind;                  /* SCOPE_GLOBAL | GROUP | REGION | SQUARE | PLAYER */
+    EffectKind  kind;
+    EffectScope scopeKind;           /* SCOPE_GLOBAL | GROUP | REGION | SQUARE | PLAYER */
     int  scope;                      /* group index, region bitmask, square, or player  */
     int  magnitudePct;               /* signed: +25, -15                                */
     int  owner;                      /* player the effect belongs to; -1 = everyone     */
@@ -276,7 +276,7 @@ cumulatively** — so the representation has to keep them all, not collapse them
 A fixed-size array of `Effect` records. Every timed system reduces to *push one Effect*.
 
 ```c
-void  effect_push(GameState *g, EffectKind k, int scopeKind, int scope,
+void  effect_push(GameState *g, EffectKind k, EffectScope scopeKind, int scope,
                   int magnitudePct, int owner, int rounds);
 int   effect_modifier(const GameState *g, EffectKind k, int square, int player);
 void  tick_effects(GameState *g);      /* decrement; compact out the expired */

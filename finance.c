@@ -478,12 +478,12 @@ static const int TABLE9_RATE[] = { 5, 8, 10, 12, 15 };
  * existing loans instead, in accrue_interest.
  *
  * Square is -1 because the rate belongs to the economy rather than to any
- * square. The LK 36 block passes p = -1, which keeps a player-scoped rate
- * card out of a board-wide display while still counting every global effect.
+ * square, and there is no player parameter for the same reason: the rate is
+ * the economy's, identical for every borrower, so a player-scoped effect can
+ * never reach it and the LK 36 block can print the same figure it issues.
  */
-int current_loan_rate(const GameState *g, int p)
+int current_loan_rate(const GameState *g)
 {
-    (void)p;                          /* nothing player-scoped reaches it  */
     return TABLE9_RATE[prevailing_condition(g)];
 }
 
@@ -501,7 +501,7 @@ void grant_loan(GameState *g, int p, int amount)
     if (amount > cap) {
         amount = cap;                          /* LK 2 is a hard ceiling   */
     }
-    rate = current_loan_rate(g, p);
+    rate = current_loan_rate(g);
 
     /* Written BEFORE the block prints, because the block reports the term
        and there was none to report: printing pl->loan.termLaps ahead of this
@@ -548,7 +548,7 @@ void increase_loan(GameState *g, int p, int extra)
     if (extra > cap) {
         extra = cap;
     }
-    rate = current_loan_rate(g, p);
+    rate = current_loan_rate(g);
 
     printf("%s increased the loan amount.\n", pl->name);
     printf("\n");

@@ -16,6 +16,7 @@ int main(int argc, char **argv)
        lives here, on main's stack, and is threaded by pointer from now on.
        About 7 KB -- comfortably inside any default stack. */
     GameState g;
+    int       i;
 
     /* D27: argv[2] overrides where Rent.csv is looked for. NULL means search
        the candidate list, which is what happens in every ordinary run. */
@@ -35,13 +36,14 @@ int main(int argc, char **argv)
     }
 
     /* Section 5 "Before the Game Begins", graded character-for-character.
-       R5.7: this must be the first line of output -- nothing may precede it. */
+       R5.7: this must be the first line of output -- nothing may precede it.
+       The roster is read back out of the state game_init just filled, so the
+       names have one definition (game.c's PLAYER_NAMES) rather than two. */
     printf("MONOPOLY-LK Simulation\n");
     printf("\n");
-    printf("Player 1 : Aggressive Investor\n");
-    printf("Player 2 : Conservative Banker\n");
-    printf("Player 3 : Risk Taker\n");
-    printf("Player 4 : Opportunistic Trader\n");
+    for (i = 0; i < NUM_PLAYERS; i++) {
+        printf("Player %d : %s\n", i + 1, g.players[i].name);
+    }
     printf("\n");
     printf("Each player begins with LKR 30,000.\n");
     printf("\n");

@@ -61,7 +61,7 @@ void effect_push(GameState *g, EffectKind kind, EffectScope scopeKind, int scope
 
     e = &g->econ.effects[g->econ.effectCount++];
     e->kind         = kind;
-    e->scopeKind    = (int)scopeKind;
+    e->scopeKind    = scopeKind;
     e->scope        = scope;
     e->magnitudePct = magnitudePct;
     e->owner        = owner;
@@ -77,7 +77,7 @@ void effect_push(GameState *g, EffectKind kind, EffectScope scopeKind, int scope
  */
 static bool scope_matches(const GameState *g, const Effect *e, int square, int player)
 {
-    switch ((EffectScope)e->scopeKind) {
+    switch (e->scopeKind) {
     case SCOPE_GLOBAL:
         return true;
     case SCOPE_GROUP:
@@ -432,10 +432,10 @@ int decline_group(const GameState *g, int *magnitudePct, int *roundsLeft)
  */
 
 typedef struct {
-    EffectKind kind;
-    int        scopeKind;      /* an EffectScope                            */
-    int        scope;          /* group, region mask, or square index       */
-    int        magnitudePct;
+    EffectKind  kind;
+    EffectScope scopeKind;
+    int         scope;         /* group, region mask, or square index       */
+    int         magnitudePct;
 } EffectSpec;
 
 typedef struct {
@@ -611,7 +611,7 @@ static void fire_event(GameState *g, const EconomicEvent *ev, const char *headin
     int i;
 
     for (i = 0; i < ev->effCount; i++) {
-        effect_push(g, ev->eff[i].kind, (EffectScope)ev->eff[i].scopeKind,
+        effect_push(g, ev->eff[i].kind, ev->eff[i].scopeKind,
                     ev->eff[i].scope, ev->eff[i].magnitudePct, owner, rounds);
     }
 

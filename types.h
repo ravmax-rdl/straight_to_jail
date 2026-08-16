@@ -390,8 +390,8 @@ typedef enum {
 } EconomicCondition;
 
 typedef struct {
-    EffectKind kind;
-    int  scopeKind;               /* an EffectScope                          */
+    EffectKind  kind;
+    EffectScope scopeKind;
     int  scope;                   /* group index, region mask, square, player */
     int  magnitudePct;            /* signed: +25, -15                        */
     int  owner;                   /* -1 = everyone                           */
@@ -501,7 +501,7 @@ void pay_community_fund(GameState *g, int p);
    LK 5's one-loan-at-a-time rule, which is why the increase action reads the
    former. accrue_interest and check_loan_default run once per round in that
    order (D13), so a loan can default on the interest it has just accrued. */
-int  current_loan_rate(const GameState *g, int p);
+int  current_loan_rate(const GameState *g);
 bool eligible_collateral(const GameState *g, int p, int sq);
 int  loan_capacity(const GameState *g, int p);
 int  max_loan(const GameState *g, int p);

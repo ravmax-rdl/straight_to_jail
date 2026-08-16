@@ -354,7 +354,7 @@ void market_conditions(const GameState *g)
        rate card out of a board-wide reading. */
     printf("Current Loan Interest\n");
     rule_line('-', 23);
-    printf("%d%%\n", current_loan_rate(g, -1));
+    printf("%d%%\n", current_loan_rate(g));
     printf("\n");
 
     rule_line('=', MARKET_RULE);

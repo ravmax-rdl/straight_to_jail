@@ -67,6 +67,14 @@ typedef struct {
  * the assets most exposed to it, is the reading its section supports. Its
  * houses stay on Basic, since D3 gives Business Interruption no coverage at
  * all on a property without a hotel and the premium would buy nothing.
+ *
+ * On the bid ceilings. 3.1 states one figure flatly -- 120% of estimated
+ * market value -- so the Aggressive Investor pays it for every square, and
+ * its group-completing preference is expressed in buy_aggressive instead.
+ * 3.3 has no ceiling at all (see BID_UNCAPPED above). 3.4 stops at market
+ * value: LK 19 opens an auction at half of it, so anything below market
+ * would lose every contested auction outright, and above it the discount
+ * this personality is defined by has stopped being a discount.
  */
 
 static const Profile PROFILE[] = {
@@ -474,6 +482,20 @@ bool decide_buy(GameState *g, int p, int sq)
 
 /* -------------------------------------------------------------- auction -- */
 
+/* How far this personality will follow an auction, as a percentage of market
+ * value. PROFILE holds the ceiling and the reasoning behind each figure; no
+ * personality's appetite depends on which square is under the hammer.
+ */
+static int bid_ceiling(GameState *g, int p, int sq)
+{
+    int pct = profile(g, p)->bidCapPct;
+
+    if (pct == BID_UNCAPPED) {
+        return INT_MAX;                /* R4.3; LK 22's cash cap stops it   */
+    }
+    return pct_of(square_value(g, sq), pct);
+}
+
 /* Return the amount to bid, or 0 to withdraw permanently from this auction
  * (LK 21).
  *
@@ -486,53 +508,6 @@ bool decide_buy(GameState *g, int p, int sq)
  * follow, which is D9's reading of section 3: the ceiling is the personality,
  * the increment is the rule.
  */
-/* How far this personality will follow an auction, as a percentage of market
- * value. PROFILE holds the ceiling; the switch is for personalities whose
- * appetite depends on which square is under the hammer.
- */
-static int bid_ceiling(GameState *g, int p, int sq)
-{
-    int pct = profile(g, p)->bidCapPct;
-
-    switch (g->players[p].strat) {
-    case STRAT_AGGRESSIVE:
-        /* 3.1 states one figure and states it flatly: "bids aggressively
-           until the property reaches 120% of its estimated market value".
-           Holding ordinary squares to 100% and reserving 120% for the ones
-           it completes a group with, or covets by name, made two other
-           bullets observable at the cost of contradicting this one. Those
-           two are expressed where they belong instead -- completes_group
-           already exempts a group-completing square from the development
-           reserve in buy_aggressive. */
-        break;
-
-    case STRAT_RISKTAKER:
-        /* R4.3: bids until its cash is gone, so there is no ceiling to
-           compute. LK 22 caps every bid at cash in run_auction regardless,
-           which is what actually stops it. */
-        break;
-
-    case STRAT_OPPORTUNIST:
-        /* R4.4: prefers discounted auctions, and the ceiling is what makes
-           that a preference rather than a slogan. Its direct-purchase test
-           is the strictest on the board, so the auction -- opened by LK 19
-           at half of market value -- is how this player expects to acquire
-           anything at all. A ceiling below market would lose every contested
-           auction to the Aggressive Investor and leave it with nothing to be
-           balanced about; market value is the point past which a discount is
-           no longer a discount. */
-        break;
-
-    case STRAT_CONSERVATIVE:
-        break;
-    }
-
-    if (pct == BID_UNCAPPED) {
-        return INT_MAX;
-    }
-    return pct_of(square_value(g, sq), pct);
-}
-
 int decide_bid(GameState *g, int p, int sq, int minBid)
 {
     int ceiling;
@@ -1038,7 +1013,7 @@ static BankAction bank_opportunist(GameState *g, int p, int *amount)
     }
 
     cap = max_loan(g, p);
-    if (cap > 0 && upside > pct_of(cap, current_loan_rate(g, p))) {
+    if (cap > 0 && upside > pct_of(cap, current_loan_rate(g))) {
         *amount = cap;
         return BANK_OBTAIN;                      /* R4.4: return beats cost */
     }
