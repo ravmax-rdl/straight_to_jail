@@ -85,6 +85,14 @@
  *                     policy therefore lapses and is rebought like any
  *                     other. The reminder stands as section 5 shows it,
  *                     and the gap is the spec's, not an omission   [LK 9]
+ * D42 No refinance    Section 1.1.4 lists five Bank actions and includes
+ *                     one; LK 5 names four and does not. The numbered
+ *                     rule governs, so there is no refinance action --
+ *                     3.3's "refinances" is LK 5's increase          [LK 5]
+ * D43 Mortgaging      is AUTOMATIC. No rule gives a player a mortgage
+ *                     action and no personality in section 3 has any
+ *                     mortgage behaviour to decide with, so the D11
+ *                     ladder is the only writer         [Rule 7, sec. 3]
  * D39 Price vs value  LK 31 moves purchase prices +15% and property values
  *                     +20% as SEPARATE bullets, so purchase_price is its
  *                     own choke point reading EFF_PRICE_MUL. Every other

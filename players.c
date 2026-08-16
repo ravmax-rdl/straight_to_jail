@@ -800,8 +800,10 @@ static BankAction bank_conservative(GameState *g, int p, int *amount)
 /* R4.3. Borrows the maximum and never voluntarily reduces it.
  *
  * There is no repayment arm at all, and that is the bullet rather than an
- * omission: "always borrows the max, refinances often" describes a player who
- * treats a loan as permanent capital. Under D4 and R1.8 that ends in
+ * omission: 3.3's "frequently refinances loans to increase available
+ * capital" describes a player who treats a loan as permanent capital. LK 5
+ * offers no refinance action (D42), so what that bullet asks for is its
+ * INCREASE action, taken at every opportunity. Under D4 and R1.8 that ends in
  * foreclosure, which is the point -- this is the personality that exercises
  * milestone 3's failure paths.
  */
@@ -814,7 +816,7 @@ static BankAction bank_risktaker(GameState *g, int p, int *amount)
         cap = loan_capacity(g, p);
         if (cap > 0) {
             *amount = cap;
-            return BANK_INCREASE;                /* R4.3: refinances often  */
+            return BANK_INCREASE;             /* 3.3, read through D42   */
         }
         if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
             return BANK_EXTEND;
@@ -937,8 +939,8 @@ BankAction decide_bank(GameState *g, int p, int *amount, int *square)
      * still, so a round spent on the debt that is growing is worth more than
      * one spent on the debt that is not.
      *
-     * The Risk Taker is excluded outright rather than by threshold: R4.3 has
-     * it borrowing the maximum and refinancing at every opportunity, and a
+     * The Risk Taker is excluded outright rather than by threshold: 3.3 has
+     * it borrowing the maximum and increasing at every opportunity, and a
      * personality that never repays a loan does not clear a mortgage either.
      */
     if (act == BANK_NONE && g->players[p].strat != STRAT_RISKTAKER) {

@@ -598,8 +598,8 @@ void increase_loan(GameState *g, int p, int extra)
        compounding in accrue_interest inside int's range by clamping at
        INT_MAX, but a top-up adds to that clamped figure directly, and
        INT_MAX + extra is signed overflow -- undefined behaviour, not merely
-       a wrong number. Seed 51 reached it: the Risk Taker refinances at every
-       opportunity under R4.3, and once its balance had saturated the next
+       a wrong number. Seed 51 reached it: the Risk Taker increases its loan at
+       every opportunity under 3.3, and once its balance had saturated the next
        increase wrapped the principal to INT_MIN, which the DEBUG guard in
        accrue_interest caught. */
     if (pl->loan.principal > INT_MAX - extra) {
@@ -1057,7 +1057,7 @@ void tick_insurance(GameState *g)
  *   2. mortgage assets that are neither mortgaged nor pledged
  *   3. still short -- bankrupt
  *
- * Repaying or refinancing a loan is deliberately NOT a rung. LK 5 and the
+ * Repaying or increasing a loan is deliberately NOT a rung. LK 5 and the
  * clarification confine every loan action to the Bank square, and letting a
  * cornered player restructure their debt from wherever they happen to be
  * standing would make that square pointless.
