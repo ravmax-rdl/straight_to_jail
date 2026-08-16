@@ -1031,7 +1031,7 @@ void auto_repairs(GameState *g)
         }
 
         cost = repair_cost(g, i);
-        if (g->players[s->owner].cash < cost || !charge(g, s->owner, cost, -1)) {
+        if (!pay_if_affordable(g, s->owner, cost)) {
             continue;
         }
 

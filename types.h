@@ -464,6 +464,15 @@ int         net_worth(const GameState *g, int p);
 void credit(GameState *g, int p, int amt);
 bool charge(GameState *g, int p, int amt, int toPlayer);
 
+/* finance.c -- charge only what the player can already cover, and report
+   whether it was paid. Every OPTIONAL spend goes through this rather than
+   through charge: a build, a renovation, a premium or a bail is a choice, and
+   charging one a player cannot afford would send them down the D11 ladder --
+   selling buildings and mortgaging land -- to fund something they were free
+   to decline. A charge the rules COMPEL (rent, tax, interest, maintenance)
+   calls charge directly, because forcing the ladder is exactly right there. */
+bool pay_if_affordable(GameState *g, int p, int cost);
+
 /* finance.c -- insurance (S1.2, LK 8-9, App E). premium reads square_value,
    so a quote tracks inflation and the market without a line of its own.
    tick_insurance runs once per round, warns at exactly INS_WARN_ROUNDS and
@@ -502,6 +511,12 @@ void pay_community_fund(GameState *g, int p);
    former. accrue_interest and check_loan_default run once per round in that
    order (D13), so a loan can default on the interest it has just accrued. */
 int  current_loan_rate(const GameState *g);
+
+/* The lap the current loan falls due on. D34 puts a loan on its borrower's
+   own lap count rather than on the game round, so maturity is issuedLap plus
+   termLaps and is compared against that player's laps -- never against
+   g->round. Meaningless unless pl->loan.active. */
+int  loan_due_lap(const Player *pl);
 bool eligible_collateral(const GameState *g, int p, int sq);
 int  loan_capacity(const GameState *g, int p);
 int  max_loan(const GameState *g, int p);
@@ -553,6 +568,14 @@ void condition_tick(GameState *g);
 int  maintenance_cost(const GameState *g, int sq);
 int  avg_condition(const Square *s);
 int  repair_cost(const GameState *g, int sq);
+
+/* Whole-square condition writes, covering every one of the MAX_HOUSES
+   segments rather than four named indices. restore_condition returns the
+   square to new, which is what LK 17's renovation, LK 29's rebuild and a
+   fresh purchase all mean. spread_condition copies segment 0 over the rest,
+   for Rule 10's hotel unwinding into the houses it replaced. */
+void restore_condition(Square *s);
+void spread_condition(Square *s);
 
 /* board.c -- ageing (LK 16-17). depreciation_tick runs on the five-round
    cadence; the percentage it accumulates is read inside square_value. */
@@ -606,10 +629,11 @@ int decline_group(const GameState *g, int *magnitudePct, int *roundsLeft);
 const char *active_card(const GameState *g, int *magnitudePct, int *roundsLeft);
 EconomicCondition prevailing_condition(const GameState *g);
 
-/* players.c -- the decision engines. Placeholder bodies until milestone 6;
-   the signatures are final, so that milestone touches players.c and no other
-   file. decide_bid returns the amount to bid or 0 to withdraw permanently;
-   minBid is the smallest legal bid right now. */
+/* players.c -- the decision engines. Section 3's four personalities answer
+   these and nothing else; every rule they answer under lives in another file,
+   which is what keeps a strategy from being able to bend one. decide_bid
+   returns the amount to bid or 0 to withdraw permanently; minBid is the
+   smallest legal bid right now. */
 bool decide_buy(GameState *g, int p, int sq);
 int  decide_bid(GameState *g, int p, int sq, int minBid);
 int  decide_build(GameState *g, int p);

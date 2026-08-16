@@ -118,6 +118,14 @@ bool charge(GameState *g, int p, int amt, int toPlayer)
     return true;
 }
 
+/* The optional-spend gate. See types.h for why an affordable-only charge is a
+   different act from a compelled one; the pre-check is what keeps the D11
+   ladder out of a purchase the player could simply have declined. */
+bool pay_if_affordable(GameState *g, int p, int cost)
+{
+    return g->players[p].cash >= cost && charge(g, p, cost, -1);
+}
+
 /* D16. The Community Development Fund's base and nothing else's: the sum of
  * square_value over the 22 COLOURED properties p owns. Buildings, railways
  * and utilities are excluded.
@@ -487,6 +495,11 @@ int current_loan_rate(const GameState *g)
     return TABLE9_RATE[prevailing_condition(g)];
 }
 
+int loan_due_lap(const Player *pl)
+{
+    return pl->loan.issuedLap + pl->loan.termLaps;
+}
+
 /* LK 2-4, 13. Credits the cash immediately and freezes the rate for life. */
 void grant_loan(GameState *g, int p, int amount)
 {
@@ -612,7 +625,7 @@ void repay_loan(GameState *g, int p, int amount)
     if (amount > pl->loan.principal) {
         amount = pl->loan.principal;
     }
-    if (pl->cash < amount || !charge(g, p, amount, -1)) {
+    if (!pay_if_affordable(g, p, amount)) {
         return;
     }
 
@@ -712,7 +725,7 @@ void redeem_mortgage(GameState *g, int p, int sq)
     if (s->owner != p || !s->mortgaged) {
         return;
     }
-    if (g->players[p].cash < due || !charge(g, p, due, -1)) {
+    if (!pay_if_affordable(g, p, due)) {
         return;
     }
 
@@ -824,7 +837,7 @@ static void reset_to_bank(Square *s)
     s->policy             = INS_NONE;
     s->policyLap          = 0;
     s->policyWarned       = false;
-    s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
+    restore_condition(s);
     s->depreciationPct    = 0;
 }
 
@@ -866,7 +879,7 @@ void check_loan_default(GameState *g)
         if (pl->bankrupt || !pl->loan.active) {
             continue;
         }
-        if (pl->laps < pl->loan.issuedLap + pl->loan.termLaps) {
+        if (pl->laps < loan_due_lap(pl)) {
             continue;
         }
         if (pl->loan.principal <= 0) {
@@ -957,7 +970,7 @@ void buy_policy(GameState *g, int p, int sq, InsuranceType tier)
     if (tier == INS_NONE || s->owner != p) {
         return;
     }
-    if (g->players[p].cash < due || !charge(g, p, due, -1)) {
+    if (!pay_if_affordable(g, p, due)) {
         return;
     }
 
@@ -1061,7 +1074,7 @@ static void sell_one_building(GameState *g, int p, int sq)
            fabric the hotel was, so they inherit its rating rather than
            arriving new -- otherwise building a hotel and selling it back
            would be the cheapest overhaul on the board. */
-        s->cond[1] = s->cond[2] = s->cond[3] = s->cond[0];
+        spread_condition(s);
         s->hotel  = false;
         s->houses = MAX_HOUSES;
         printf("%s sold the hotel on %s.\n", g->players[p].name, s->name);

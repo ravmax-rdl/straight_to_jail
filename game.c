@@ -209,8 +209,6 @@ static int count_hotels(const GameState *g, int p)
     return n;
 }
 
-/* Milestone 2 swaps the stored price for square_value once the choke point
-   exists; until then nothing is owned and both read zero. */
 /* The GAME OVER block's Total Property Value: everything the player holds on
  * the board, priced exactly as net_worth prices it.
  *
@@ -282,6 +280,19 @@ void round_summary(const GameState *g)
     rule_line('=', SUMMARY_RULE);
 }
 
+/* The boom and decline sections of the LK 36 block, which differ only in
+   their heading and underline width. The regional card below them is NOT
+   this shape and deliberately does not use this -- its template puts the
+   name and the magnitude on separate lines. */
+static void group_section(const char *heading, int rule, int grp, int pct, int left)
+{
+    printf("%s\n", heading);
+    rule_line('-', rule);
+    printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
+    printf("Rounds Remaining : %d\n", left);
+    printf("\n");
+}
+
 /* Rule-LK 36, printed at the end of every round immediately after the
  * summary.
  *
@@ -290,9 +301,8 @@ void round_summary(const GameState *g)
  * 20, 9 and 21 -- so they are transcribed from the template rather than
  * computed, and a comment says so to stop a later reader "fixing" them.
  *
- * Milestone 4 fills the first three sections from the effect registry. Until
- * then only the two scalar rates have anything to report, and a section with
- * nothing active prints nothing at all.
+ * The first three sections are filled from the effect registry; the last two
+ * are scalar rates. A section with nothing active prints nothing at all.
  */
 void market_conditions(const GameState *g)
 {
@@ -308,28 +318,16 @@ void market_conditions(const GameState *g)
        body together. LK 36 reports what is in force, and an empty heading
        reports the absence of something rather than the presence of nothing.
 
-       The three bodies are transcribed from the section 5 template, and note
-       that the first two are not shaped like the third: a boom puts its
-       magnitude in brackets after the name on one line, while a regional card
-       puts the name and the magnitude on separate lines. That asymmetry is in
-       the document. The percentage shown is the VALUE_MUL each system pushed,
-       read back out of the registry rather than restated here. */
+       The percentage shown is the VALUE_MUL each system pushed, read back out
+       of the registry rather than restated here. */
     grp = boom_group(g, &pct, &left);
     if (grp != GRP_NONE) {
-        printf("Market Boom\n");
-        rule_line('-', 13);
-        printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
-        printf("Rounds Remaining : %d\n", left);
-        printf("\n");
+        group_section("Market Boom", 13, grp, pct, left);
     }
 
     grp = decline_group(g, &pct, &left);
     if (grp != GRP_NONE) {
-        printf("Market Decline\n");
-        rule_line('-', 16);
-        printf("%s (%+d%%)\n", group_name((PropertyGroup)grp), pct);
-        printf("Rounds Remaining : %d\n", left);
-        printf("\n");
+        group_section("Market Decline", 16, grp, pct, left);
     }
 
     card = active_card(g, &pct, &left);
@@ -350,8 +348,8 @@ void market_conditions(const GameState *g)
     /* D21: the rate a new loan would be written at now, not the stored one.
        Section 5's sample prints 9% during an Economic Recession, which is the
        stable 8% with the event's relative +15% applied -- so the block has to
-       report the adjusted figure. Player -1 keeps a player-scoped Appendix A
-       rate card out of a board-wide reading. */
+       report the adjusted figure. It is the economy's rate and takes no
+       player, so this is necessarily the same figure grant_loan would issue. */
     printf("Current Loan Interest\n");
     rule_line('-', 23);
     printf("%d%%\n", current_loan_rate(g));
@@ -409,27 +407,8 @@ void final_report(const GameState *g)
     rule_line('=', SUMMARY_RULE);
 }
 
-/* --------------------------------------------------------- the loops ----- */
-
-/* Rule 3. Steps 2 and 3 only for now; the remaining six arrive with the
-   systems they depend on, in the order the milestones introduce them. */
 /* ----------------------------------------------------------- landing --- */
 
-/* Rule 3 step 4: resolve whatever the square the player stopped on does.
- *
- * Every SquareType is listed explicitly and there is no default label. That
- * is deliberate: adding a type later produces
- *   warning: enumeration value 'SQ_X' not handled in switch
- * at exactly the places that need updating. A default: would compile
- * silently and do nothing, which is the failure this switch exists to
- * prevent.
- */
-/* Rules 5 and 7: an unowned purchasable square is bought or auctioned; an
- * owned one charges rent unless its owner is standing on it.
- *
- * Rule 5 gives no third option. Declining is not "nothing happens" -- it is
- * an auction, immediately, which is why the else branch is not empty.
- */
 /* LK 17. Pays a tenth of current market value to undo the wear and restart
  * the clock.
  *
@@ -453,14 +432,14 @@ static void renovate_step(GameState *g, int p, int sq)
        the worse of the two, so a square carrying it gets rebuilt first. */
     if (s->structDamaged) {
         cost = structural_renovation_cost(g, sq);
-        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+        if (!pay_if_affordable(g, p, cost)) {
             return;
         }
 
         /* LK 29 restores value, rent and condition together, which is three
            fields because the three penalties are read in three places. */
         s->structDamaged      = false;
-        s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
+        restore_condition(s);
 
         printf("%s rebuilt %s.\n", g->players[p].name, s->name);
         printf("Renovation Cost : LKR %s.\n", fmt_lkr(b, cost));
@@ -469,7 +448,7 @@ static void renovate_step(GameState *g, int p, int sq)
     }
 
     cost = pct_of(square_value(g, sq), RENOVATE_PCT);
-    if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+    if (!pay_if_affordable(g, p, cost)) {
         return;
     }
 
@@ -481,7 +460,7 @@ static void renovate_step(GameState *g, int p, int sq)
        been standing unmaintained, and leaving the count to climb would
        hand LK 28 structural damage to a property just rebuilt. */
     s->depreciationPct    = 0;
-    s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
+    restore_condition(s);
     s->purchasedRound     = g->round;   /* D19: the age resets with it     */
 
     printf("%s renovated %s.\n", g->players[p].name, s->name);
@@ -489,6 +468,12 @@ static void renovate_step(GameState *g, int p, int sq)
     end_block();
 }
 
+/* Rules 5 and 7: an unowned purchasable square is bought or auctioned; an
+ * owned one charges rent unless its owner is standing on it.
+ *
+ * Rule 5 gives no third option. Declining is not "nothing happens" -- it is
+ * an auction, immediately, which is why the else branch is not empty.
+ */
 static void land_on_purchasable(GameState *g, int p, int sq, int diceTotal)
 {
     char    b[FMT_BUF];
@@ -564,6 +549,15 @@ static void bank_visit(GameState *g, int p)
     }
 }
 
+/* Rule 3 step 4: resolve whatever the square the player stopped on does.
+ *
+ * Every SquareType is listed explicitly and there is no default label. That
+ * is deliberate: adding a type later produces
+ *   warning: enumeration value 'SQ_X' not handled in switch
+ * at exactly the places that need updating. A default: would compile
+ * silently and do nothing, which is the failure this switch exists to
+ * prevent.
+ */
 void land_on(GameState *g, int p, int sq, int diceTotal)
 {
     switch (g->board[sq].type) {
@@ -807,7 +801,7 @@ static void build_step(GameState *g, int p)
         assert_builds_evenly(g, sq);
 #endif
 
-        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+        if (!pay_if_affordable(g, p, cost)) {
             return;
         }
 
@@ -882,13 +876,13 @@ static void maintenance_step(GameState *g, int p)
         Square *s    = &g->board[sq];
         int     cost = maintenance_cost(g, sq);
 
-        if (g->players[p].cash < cost || !charge(g, p, cost, -1)) {
+        if (!pay_if_affordable(g, p, cost)) {
             return;
         }
 
         /* maintenance_cost already charges per building -- house cost x
            houses, or the hotel's -- so paying it restores all of them. */
-        s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
+        restore_condition(s);
         printf("%s maintained %s.\n", g->players[p].name, s->name);
         printf("\n");
         printf("Maintenance Cost : LKR %s.\n", fmt_lkr(b, cost));
@@ -1060,9 +1054,8 @@ void play_round(GameState *g)
 }
 
 /* Rule 15's first ending: the game stops when only one player is still
-   solvent. Nobody can go bankrupt yet, so this is always false until
-   milestone 3 -- but game_run is written against it now so the ending does
-   not need retrofitting later. */
+   solvent. Fewer than two rather than exactly one, because a single round's
+   interest and defaults can take the last two players together. */
 bool game_over(const GameState *g)
 {
     int i, solvent = 0;

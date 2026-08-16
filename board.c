@@ -468,7 +468,7 @@ bool board_init(GameState *g, const char *csvPath)
            and D19 derives age from this field. */
         s->owner          = -1;
         s->purchasedRound = -1;
-        s->cond[0] = s->cond[1] = s->cond[2] = s->cond[3] = 100;
+        restore_condition(s);
         s->policy         = INS_NONE;
 
         if (s->type == SQ_PROPERTY) {
@@ -874,6 +874,28 @@ int avg_condition(const Square *s)
         total += s->cond[i];
     }
     return total / n;
+}
+
+/* Both write every segment the array has, so MAX_HOUSES is the only place
+   Rule 9's house limit is stated. The five sites that used to spell out
+   cond[0] through cond[3] would have gone silently wrong had that limit
+   ever moved. */
+void restore_condition(Square *s)
+{
+    int i;
+
+    for (i = 0; i < MAX_HOUSES; i++) {
+        s->cond[i] = 100;
+    }
+}
+
+void spread_condition(Square *s)
+{
+    int i;
+
+    for (i = 1; i < MAX_HOUSES; i++) {
+        s->cond[i] = s->cond[0];
+    }
 }
 
 static int condition_rent_pct(int conditionPct)

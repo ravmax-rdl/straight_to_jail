@@ -851,8 +851,15 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
 /* --------------------------------------------------------------- banking -- */
 
 /* How close to maturity a loan must be before a strategy buys time rather
-   than hoping for another Bank landing. */
+   than hoping for another Bank landing. R1.8 makes the Bank square the only
+   place a term can be extended, so a player who waits for the due lap itself
+   will almost always miss it. */
 #define EXTEND_WITHIN_ROUNDS 5
+
+static bool loan_near_maturity(const Player *pl)
+{
+    return pl->laps + EXTEND_WITHIN_ROUNDS >= loan_due_lap(pl);
+}
 
 /* R1.8 and LK 5: the Bank square offers five actions and grants exactly one
  * per landing, so each arm returns the first that applies and its order IS
@@ -874,26 +881,25 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
 static BankAction bank_aggressive(GameState *g, int p, int *amount)
 {
     const Player *pl = &g->players[p];
+    int           needed, cap;
 
     if (pl->loan.active) {
         if (pl->cash / 2 > pl->loan.principal) {
             *amount = pl->loan.principal;
             return BANK_REPAY_FULL;              /* R4.1: only when 2x      */
         }
-        if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
+        if (loan_near_maturity(pl)) {
             return BANK_EXTEND;
         }
         return BANK_NONE;
     }
 
-    {
-        int needed = development_shortfall(g, p) - pl->cash;
-        int cap    = max_loan(g, p);
+    needed = development_shortfall(g, p) - pl->cash;
+    cap    = max_loan(g, p);
 
-        if (needed > 0 && cap > 0) {
-            *amount = (needed < cap) ? needed : cap;
-            return BANK_OBTAIN;                  /* R4.1: funds the build   */
-        }
+    if (needed > 0 && cap > 0) {
+        *amount = (needed < cap) ? needed : cap;
+        return BANK_OBTAIN;                      /* R4.1: funds the build   */
     }
 
     return BANK_NONE;
@@ -964,7 +970,7 @@ static BankAction bank_risktaker(GameState *g, int p, int *amount)
             *amount = cap;
             return BANK_INCREASE;             /* 3.3, read through D42   */
         }
-        if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
+        if (loan_near_maturity(pl)) {
             return BANK_EXTEND;
         }
         return BANK_NONE;
@@ -1000,7 +1006,7 @@ static BankAction bank_opportunist(GameState *g, int p, int *amount)
             *amount = pl->loan.principal;
             return BANK_REPAY_FULL;
         }
-        if (pl->laps + EXTEND_WITHIN_ROUNDS >= pl->loan.issuedLap + pl->loan.termLaps) {
+        if (loan_near_maturity(pl)) {
             return BANK_EXTEND;
         }
         return BANK_NONE;
@@ -1106,20 +1112,6 @@ BankAction decide_bank(GameState *g, int p, int *amount, int *square)
 
 /* ---------------------------------------------------------- liquidation -- */
 
-/* Rule 3 step 7: which PROPERTY to sell outright, or -1 to sell nothing.
- *
- * Section 3 says properties, not buildings. Three of the four personalities
- * are given a position on it -- section 3.1 never sells one, section 3.3
- * "sells lower-value properties to finance premium developments", section 3.4
- * "sells properties expected to decrease in value following economic events"
- * -- and D32 prices the act at market value.
- *
- * An earlier version sold one level of development instead. That was a
- * misreading, and an expensive one: buildings come back at half what they
- * cost, so selling and rebuilding destroyed value on every cycle and the
- * board churned at roughly one demolition per construction.
- */
-
 /* Never sell out from under a monopoly. Breaking a group to raise cash
    forfeits Rule 8, which is the only thing that makes the rest of the group
    worth holding -- so whatever the strategy, the group being developed is
@@ -1168,6 +1160,19 @@ bool decide_bail(GameState *g, int p)
     return JAIL_BAIL <= pct_of(pl->cash, profile(g, p)->bailBelowPct);
 }
 
+/* Rule 3 step 7: which PROPERTY to sell outright, or -1 to sell nothing.
+ *
+ * Section 3 says properties, not buildings. Three of the four personalities
+ * are given a position on it -- section 3.1 never sells one, section 3.3
+ * "sells lower-value properties to finance premium developments", section 3.4
+ * "sells properties expected to decrease in value following economic events"
+ * -- and D32 prices the act at market value.
+ *
+ * An earlier version sold one level of development instead. That was a
+ * misreading, and an expensive one: buildings come back at half what they
+ * cost, so selling and rebuilding destroyed value on every cycle and the
+ * board churned at roughly one demolition per construction.
+ */
 int decide_liquidate(GameState *g, int p)
 {
     int i, best = -1, bestValue = 0;
