@@ -5,6 +5,10 @@
 **Supplemental data:** [`assets/Rent.csv`](../../../assets/Rent.csv) + the lecturer's clarification set
 **Requirements:** [`docs/REQUIREMENTS.md`](../../REQUIREMENTS.md) — R-items and decisions D1–D26
 **Revised:** 2026-08-10 — clarification set folded in
+**Superseded in part.** Decisions have been revised since this was written: D19 -> D34's two clocks,
+D21's Table-9-at-issue, D33's reversion to tax-on-landing, D37's per-building condition. Where this
+note and the sources disagree, `types.h`'s decision block and the code are authoritative. The
+structures below are kept current; the rationale around them is of its date.
 **Status:** approved
 
 ---
@@ -136,21 +140,21 @@ typedef struct {                     /* one board square; property fields idle o
 
     int  depreciationPct, cond[MAX_HOUSES];  /* LK 25: per BUILDING (D37)      */
     InsuranceType policy;
-    int  policyRounds;
+    int  policyLap;                  /* D34: OWNER's lap count at purchase             */
 } Square;
 
 typedef struct {
     bool active;
     int  principal;                  /* grows every round at ratePct                    */
     int  ratePct;                    /* frozen at issue, LK 13                          */
-    int  issuedRound;                /* D19: matures at issuedRound + LOAN_ROUNDS       */
-    int  termRounds;                 /* 20, extended by the LK 5 "extend" action        */
+    int  issuedLap;                  /* D34: the BORROWER's lap count at issue          */
+    int  termLaps;                   /* 20 of the borrower's own laps (LK 5 extends)    */
 } Loan;
 
 typedef struct {
     const char *name;
     Strategy    strat;
-    int  cash, pos, jailTurns, taxesDue;
+    int  cash, pos, jailTurns;       /* D33: no taxesDue -- tax is paid on landing      */
     bool bankrupt, jailed, sufferedLoss;   /* sufferedLoss gates Risk Taker's insurance */
     Loan loan;
 } Player;
@@ -166,10 +170,8 @@ typedef struct {                     /* a single timed modifier — see §5     
 
 typedef struct {
     int  inflationPct;               /* most recent draw, for the LK 36 block           */
-    int  incomeTaxPct;               /* seeded at 15, inflation-adjusted (D2')          */
     int  groupCooldown[GRP_COUNT];   /* LK 33: 30-round bar on re-selection             */
     int  lastBoomGroup, lastDeclineGroup;
-    int  activeRegulation;           /* -1 = none                                       */
     int  activeEvent, activeEventRound; /* LK 18 row in force; Table 9 keys on it (D21) */
     Effect effects[MAX_EFFECTS];
     int    effectCount;
@@ -378,7 +380,7 @@ balances.
 
 ```
 loan interest accrues (every round, at each loan's ISSUED rate)
-loan default check     (round >= issuedRound + termRounds with principal outstanding)
+loan default check     (borrower laps >= issuedLap + termLaps, principal outstanding)
 building condition -2%; unmaintained counters advance
 insurance countdown + 3-round expiry warnings
 automatic repairs

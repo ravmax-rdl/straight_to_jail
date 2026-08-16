@@ -515,7 +515,7 @@ $$\text{Net Worth} = \underbrace{C + P + B + R + U + I}_{\text{assets}} - \under
 | $I$ | Insurance claims receivable | **always 0** (D15) |
 | $L$ | Outstanding loans | `loan.principal` |
 | $A$ | Accrued interest | already folded into $L$ |
-| $T$ | Taxes due | `players[p].taxesDue` |
+| $T$ | Taxes due | always zero -- income tax is charged on landing, so nothing is ever outstanding (**D33**) |
 
 This is the accounting identity $\text{Assets} - \text{Liabilities} = \text{Equity}$, and it is
 what decides the winner if all 500 rounds elapse.
