@@ -503,6 +503,17 @@ void grant_loan(GameState *g, int p, int amount)
     }
     rate = current_loan_rate(g, p);
 
+    /* Written BEFORE the block prints, because the block reports the term
+       and there was none to report: printing pl->loan.termLaps ahead of this
+       announced "Duration : 0 Rounds" on every first loan in the game. The
+       increase and extend blocks read the same field and were always correct,
+       having a live loan to read. */
+    pl->loan.active      = true;
+    pl->loan.principal   = amount;
+    pl->loan.ratePct     = rate;               /* LK 13: frozen for life   */
+    pl->loan.issuedLap   = pl->laps;           /* D34: the borrower's own  */
+    pl->loan.termLaps    = LOAN_ROUNDS;
+
     printf("%s obtained a secured loan.\n", pl->name);
     printf("\n");
     printf("Loan Amount : LKR %s.\n", fmt_lkr(b, amount));
@@ -513,12 +524,6 @@ void grant_loan(GameState *g, int p, int amount)
     printf("Interest Rate : %d%%\n", rate);
     printf("Duration : %d Rounds\n", pl->loan.termLaps);
     end_block();
-
-    pl->loan.active      = true;
-    pl->loan.principal   = amount;
-    pl->loan.ratePct     = rate;               /* LK 13: frozen for life   */
-    pl->loan.issuedLap   = pl->laps;           /* D34: the borrower's own  */
-    pl->loan.termLaps  = LOAN_ROUNDS;
 
     credit(g, p, amount);
 }

@@ -108,10 +108,11 @@ static bool group_developable(const GameState *g, int p, PropertyGroup grp)
  * told about -- the other seven are percentages a choke point applies without
  * anyone asking.
  *
- * D25 implements the cap alone and drops the rule's second clause, that
- * additional purchases require development within five rounds. Enforcing the
- * cap strictly makes that clause unreachable: the additional purchase can
- * never happen, so there is nothing to develop and no five rounds to count.
+ * D25 REVISED, and this note with it. The cap gates acquisition, and holding
+ * more than three undeveloped colour properties makes construction
+ * compulsory -- see over_speculation_cap below, which overrides personality.
+ * What is not implemented is a deadline: LK 24 gives no penalty for failing
+ * to develop within five rounds, so compulsion is the whole of the clause.
  *
  * effect_modifier sums, which would be wrong for a ceiling -- but LK 24 runs
  * one regulation at a time, so at most one such record exists and the sum is
@@ -232,7 +233,7 @@ static int development_shortfall(const GameState *g, int p)
  */
 static bool buy_aggressive(GameState *g, int p, int sq)
 {
-    int price = square_value(g, sq);
+    int price = purchase_price(g, sq);
     int cash  = g->players[p].cash;
 
     if (!rent_still_payable(g, p) || cash < price) {
@@ -257,7 +258,7 @@ static bool buy_aggressive(GameState *g, int p, int sq)
  */
 static bool buy_conservative(GameState *g, int p, int sq)
 {
-    int price = square_value(g, sq);
+    int price = purchase_price(g, sq);
     int cash  = g->players[p].cash;
 
     if (effect_modifier(g, EFF_VALUE_MUL, -1, p) < 0) {
@@ -307,7 +308,7 @@ static bool buy_opportunist(GameState *g, int p, int sq)
 {
     int bar;
 
-    if (g->players[p].cash < square_value(g, sq)) {
+    if (g->players[p].cash < purchase_price(g, sq)) {
         return false;
     }
 
@@ -339,7 +340,7 @@ static bool wants_to_buy(GameState *g, int p, int sq)
         /* R4.3: buys every available property, and invests through
            downturns -- so unlike the Conservative Banker there is
            deliberately no market test here at all. */
-        return g->players[p].cash >= square_value(g, sq);
+        return g->players[p].cash >= purchase_price(g, sq);
 
     case STRAT_OPPORTUNIST:
         return buy_opportunist(g, p, sq);
@@ -489,7 +490,7 @@ static bool wants_to_build(GameState *g, int p, int sq, bool hotel)
            standing discount on this exact purchase while inflation is a
            reason to wait for one -- when both hold, the discount is already
            in hand and the reason to wait has gone. */
-        if (effect_modifier(g, EFF_BUILD_COST_MUL, sq, p) < 0) {
+        if (effect_modifier(g, EFF_HOUSE_COST_MUL, sq, p) < 0) {
             return true;
         }
         return g->econ.inflationPct <= 0;
@@ -837,9 +838,12 @@ static BankAction bank_risktaker(GameState *g, int p, int *amount)
  *
  * The comparison is the one the bullet names: what the borrowed capital would
  * add, against what it would cost to hold. Projected appreciation across the
- * whole portfolio stands for the return, and current_loan_rate for the cost
- * -- both read live, so a Reduce Loan Interest regulation or a Stock Market
- * Boom changes this player's willingness to borrow without a line here.
+ * whole portfolio stands for the return, and current_loan_rate for the cost.
+ *
+ * Under D21 that cost is Appendix D alone -- the prevailing condition and
+ * nothing else -- so a recession or a Stock Market Boom still moves this
+ * player's willingness to borrow, by moving the Table 9 row. The +/-2 point
+ * instruments no longer reach it, because they no longer reach a new loan.
  */
 static BankAction bank_opportunist(GameState *g, int p, int *amount)
 {
