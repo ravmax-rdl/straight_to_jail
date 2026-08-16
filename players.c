@@ -159,24 +159,6 @@ static bool completes_group(const GameState *g, int p, int sq)
     return true;
 }
 
-/* R4.1: is there anyone left who could still land on this and pay for it?
- *
- * The bullet reads "always buys if one future rent remains payable", which is
- * a solvency question rather than a property question -- a square nobody can
- * visit earns nothing however good it looks.
- */
-static bool rent_still_payable(const GameState *g, int p)
-{
-    int i;
-
-    for (i = 0; i < NUM_PLAYERS; i++) {
-        if (i != p && !g->players[i].bankrupt) {
-            return true;
-        }
-    }
-    return false;
-}
-
 /* What it would cost p to raise every square of every monopoly it holds by
  * one level.
  *
@@ -231,6 +213,106 @@ static int development_shortfall(const GameState *g, int p)
  * which creates more development than it defers, so it is never declined on
  * these grounds.
  */
+/* ------------------------------------------------- section 3's vocabulary --
+ *
+ * Section 3 names four value judgements and defines none of them: "expensive"
+ * property groups, "premium" properties, "high-value" developments, and the
+ * "one future rent" a purchase must leave behind. Each is given a formula
+ * here, in one place, so the four personalities cannot drift apart on what
+ * the words mean -- and so a reader can disagree with a definition without
+ * hunting for where it was assumed.
+ *
+ * All four read CURRENT prices, so they move with inflation and with LK 31's
+ * boom exactly as the board does.
+ */
+
+/* The two colour groups with the highest total purchase price (D44). Eight
+   groups, so the two highest are found by scanning twice rather than by
+   sorting anything. */
+static bool expensive_group(const GameState *g, PropertyGroup grp)
+{
+    int total[GRP_COUNT];
+    int i, k, best = -1, second = -1;
+
+    if (grp == GRP_NONE) {
+        return false;                            /* railways and utilities  */
+    }
+
+    for (i = 0; i < GRP_COUNT; i++) {
+        total[i] = 0;
+    }
+    for (i = 0; i < NUM_SQUARES; i++) {
+        const Square *s = &g->board[i];
+        if (s->type == SQ_PROPERTY && s->group != GRP_NONE) {
+            total[s->group] += s->price;
+        }
+    }
+
+    for (k = 0; k < GRP_COUNT; k++) {
+        if (best < 0 || total[k] > total[best]) {
+            second = best;
+            best   = k;
+        } else if (second < 0 || total[k] > total[second]) {
+            second = k;
+        }
+    }
+    return (int)grp == best || (int)grp == second;
+}
+
+/* "Premium" is comparative -- a higher-priced property than most (D44). The
+   mean of the 22 coloured properties is the line, and it moves with them. */
+static bool premium_property(const GameState *g, int sq)
+{
+    int i, total = 0, n = 0;
+
+    if (g->board[sq].type != SQ_PROPERTY) {
+        return false;
+    }
+    for (i = 0; i < NUM_SQUARES; i++) {
+        if (g->board[i].type == SQ_PROPERTY) {
+            total += g->board[i].price;
+            n++;
+        }
+    }
+    return n > 0 && g->board[sq].price > total / n;
+}
+
+/* "High-value" is superlative, so it is the stricter test of the two: a
+   property in one of the two most expensive groups (D44). Reusing
+   expensive_group rather than inventing a second threshold is the point --
+   the spec uses both phrases for the same end of the same scale. */
+static bool high_value_property(const GameState *g, int sq)
+{
+    return g->board[sq].type == SQ_PROPERTY &&
+           expensive_group(g, g->board[sq].group);
+}
+
+/* 3.1's "at least one future rent" (D44): the most the next roll could cost.
+ * Two dice reach 2 to 12 squares ahead, so this is the dearest rent standing
+ * on any of those eleven squares -- computed at each distance, because a
+ * utility's rent is a multiple of the roll that reached it.
+ *
+ * A square this player owns costs nothing to land on and is skipped.
+ */
+static int one_future_rent(const GameState *g, int p)
+{
+    int d, worst = 0;
+
+    for (d = 2; d <= 12; d++) {
+        int sq   = (g->players[p].pos + d) % NUM_SQUARES;
+        int rent;
+
+        if (g->board[sq].owner == p) {
+            continue;
+        }
+        rent = square_rent(g, sq, d);
+        if (rent > worst) {
+            worst = rent;
+        }
+    }
+    return worst;
+}
+
 /* The two squares 3.1 names outright: "prioritizes acquiring premium
    properties such as Galle Face and Nuwara Eliya". Board indices rather
    than names, because Rent.csv can rename a property but Table 1 fixes
@@ -248,20 +330,16 @@ static bool buy_aggressive(GameState *g, int p, int sq)
     int price = purchase_price(g, sq);
     int cash  = g->players[p].cash;
 
-    if (!rent_still_payable(g, p) || cash < price) {
+    if (cash < price) {
         return false;
     }
-    /* Two exemptions from the development reserve, and they are the two
-       bullets 3.1 states as priorities: a square that completes a group
-       creates more development than it defers, and the premium squares the
-       rule names are wanted for their own sake. Both used to live in the
-       bid ceiling, which cost 3.1 its flat 120%; a priority belongs in what
-       the player is willing to BUY, not in what it will pay. */
-    if (completes_group(g, p, sq) || covets(sq)) {
-        return true;
-    }
 
-    return cash - price >= development_shortfall(g, p);
+    /* 3.1 states the whole condition and states it as an ALWAYS: buys "if
+       sufficient funds remain to pay at least one future rent". The reserve
+       had been the cost of finishing its development instead, which is a
+       different and much larger number, so this player declined purchases
+       the bullet requires. */
+    return cash - price >= one_future_rent(g, p);
 }
 
 /* R4.2. Buys out of surplus rather than out of capital, and stops buying
@@ -296,16 +374,12 @@ static bool buy_conservative(GameState *g, int p, int sq)
         return false;                            /* 3.2: not in a slump     */
     }
 
-    /* R4.2: buys only if at least half the cash survives the purchase --
-       except for railways and utilities, where it will go down to a quarter.
-       That relaxation IS the "prefers railways and utilities" bullet: they
-       are fixed income that can never be developed, so they never demand a
-       second outlay the way a colour group does, and this personality will
-       dig deeper for one. */
-    if (g->board[sq].type != SQ_PROPERTY) {
-        return cash - price >= cash / 4;
-    }
-
+    /* 3.2 states one figure and admits no exception: "purchases properties
+       only if at least 50% of current cash remains after purchase". The
+       reserve had been relaxed to a quarter for railways and utilities, to
+       give "prefers railway stations and utility companies" somewhere to
+       live -- but a preference cannot be paid for by breaking a rule stated
+       in the same list. That bullet now has no expression; see D44. */
     return cash - price >= cash / 2;
 }
 
@@ -451,6 +525,7 @@ static int bid_ceiling(GameState *g, int p, int sq)
 int decide_bid(GameState *g, int p, int sq, int minBid)
 {
     int ceiling;
+    int cash = g->players[p].cash;
 
     /* LK 24 governs how much a player OWNS, not how they came to own it, so
        the Anti-Speculation cap gates the auction exactly as it gates the
@@ -468,7 +543,22 @@ int decide_bid(GameState *g, int p, int sq, int minBid)
     }
 
     ceiling = bid_ceiling(g, p, sq);
-    if (minBid > g->players[p].cash || minBid > ceiling) {
+    if (minBid > ceiling) {
+        return 0;
+    }
+
+    /* 3.1 bids to 120% on everything, so the only thing left to prioritise
+       WITH is its own reserve. It keeps one future rent back on an ordinary
+       square -- the same reserve its purchase rule names -- and spends that
+       too on a square completing a group or on one the rule names outright.
+       That is "prioritizes completing groups" and "prioritizes premium
+       properties" expressed without touching the ceiling either states. */
+    if (g->players[p].strat == STRAT_AGGRESSIVE &&
+        !completes_group(g, p, sq) && !covets(sq)) {
+        cash -= one_future_rent(g, p);
+    }
+
+    if (minBid > cash) {
         return 0;
     }
     return minBid;
@@ -562,18 +652,38 @@ static bool is_group_minimum(const GameState *g, int sq)
  * hotels last; pushing the most developed finishes one group and starts
  * collecting hotel rent while the others are still empty lots.
  */
-static bool prefers_candidate(GameState *g, int p, int level, int bestLevel)
+static bool prefers_candidate(GameState *g, int p, int cand, int best)
 {
+    int level     = development_level(g, cand);
+    int bestLevel = development_level(g, best);
+
     switch (g->players[p].strat) {
     case STRAT_AGGRESSIVE:
-        /* R4.1: hotels as soon as legal. Concentrating on the group nearest
+        /* 3.1: hotels as soon as legal. Concentrating on the group nearest
            completion is the only way to get there -- spreading evenly across
            every monopoly held reaches four houses everywhere and a hotel
-           nowhere, which is what this arm was doing before. */
+           nowhere. Rule 9 still decides WHICH square inside the group. */
         return level > bestLevel;
 
+    case STRAT_RISKTAKER: {
+        /* 3.3 twice over: "prioritizes expensive property groups" and
+           "constructs hotels as early as possible". An expensive group
+           outranks a cheap one however far along the cheap one is -- that
+           is what prioritising the group means -- and within the same
+           class the nearer hotel wins, which is where the income is.
+           Rule 9 and Rule 10 are untouched: the group is the choice here,
+           the square inside it is is_group_minimum's, and a hotel only
+           ever replaces four houses. */
+        bool candRich = expensive_group(g, g->board[cand].group);
+        bool bestRich = expensive_group(g, g->board[best].group);
+
+        if (candRich != bestRich) {
+            return candRich;
+        }
+        return level > bestLevel;
+    }
+
     case STRAT_CONSERVATIVE:
-    case STRAT_RISKTAKER:
     case STRAT_OPPORTUNIST:
         return level < bestLevel;
     }
@@ -582,7 +692,7 @@ static bool prefers_candidate(GameState *g, int p, int level, int bestLevel)
 
 int decide_build(GameState *g, int p)
 {
-    int i, best = -1, bestLevel = -1;
+    int i, best = -1;
 
     /* Appendix A's Labour Strike stops this player building for two rounds.
        A flag rather than a percentage, so it is read for presence. */
@@ -614,12 +724,11 @@ int decide_build(GameState *g, int p)
         if (!wants_to_build(g, p, i, level == MAX_HOUSES)) {
             continue;
         }
-        if (best >= 0 && !prefers_candidate(g, p, level, bestLevel)) {
+        if (best >= 0 && !prefers_candidate(g, p, i, best)) {
             continue;
         }
 
-        best      = i;
-        bestLevel = level;
+        best = i;
     }
 
     return best;
@@ -723,7 +832,17 @@ int decide_insurance(GameState *g, int p, InsuranceType *tier)
             continue;
         }
 
-        want = s->hotel ? pr->hotelTier : pr->houseTier;
+        /* 3.4 buys Comprehensive "only for high-value developments", and
+           high-value is D44's test rather than "has a hotel" -- which had
+           insured a cheap hotel and refused an expensive four-house
+           property. The tier columns still decide WHICH cover; this decides
+           whether the dearer of the two is warranted at all. */
+        if (g->players[p].strat == STRAT_OPPORTUNIST &&
+            !high_value_property(g, i)) {
+            want = pr->houseTier;
+        } else {
+            want = s->hotel ? pr->hotelTier : pr->houseTier;
+        }
         if (want == INS_NONE) {
             continue;
         }
@@ -1086,6 +1205,12 @@ int decide_liquidate(GameState *g, int p)
             int value;
 
             if (!sellable(g, p, i)) {
+                continue;
+            }
+            /* "Sells LOWER-VALUE properties to finance premium
+               developments" -- a premium property is what the sale is
+               for, never what is sold to pay for it (D44). */
+            if (premium_property(g, i)) {
                 continue;
             }
             value = square_value(g, i);

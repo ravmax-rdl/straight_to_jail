@@ -85,6 +85,13 @@
  *                     policy therefore lapses and is rebought like any
  *                     other. The reminder stands as section 5 shows it,
  *                     and the gap is the spec's, not an omission   [LK 9]
+ * D44 Sec. 3 values   the four judgements section 3 names and never defines
+ *                     EXPENSIVE GROUP = the 2 groups with the highest total
+ *                     price. PREMIUM = price above the mean of the 22.
+ *                     HIGH-VALUE = in an expensive group. FUTURE RENT =
+ *                     the dearest rent 2-12 squares ahead. IGNORED as gaps:
+ *                     balanced portfolio, bankruptcy imminent, expected
+ *                     return, prefers railways/utilities        [sec. 3]
  * D42 No refinance    Section 1.1.4 lists five Bank actions and includes
  *                     one; LK 5 names four and does not. The numbered
  *                     rule governs, so there is no refinance action --
