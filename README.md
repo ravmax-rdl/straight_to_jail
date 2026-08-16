@@ -34,7 +34,7 @@ Take-home assignment for *SCS 1301 – Data Structures and Program Design using 
 
 Classic Monopoly bones — 22 properties in 8 colour groups, 4 railway stations, 2 utilities, auctions, monopolies, houses and hotels, jail — grafted onto a working model of the Sri Lankan economy:
 
-- **Banking** — secured loans from Bank of Ceylon at 75% loan-to-value, interest compounding every round, refinancing, and foreclosure when it all goes wrong.
+- **Banking** — secured loans from Bank of Ceylon at 75% loan-to-value, interest compounding every round, mid-term top-ups, and foreclosure when it all goes wrong.
 - **Insurance** — three policy tiers (Basic / Comprehensive / Business Interruption) from two insurers, protecting against the fires, floods, and riots that randomly strike developed properties.
 - **A living economy** — periodic inflation draws reprice everything; property groups boom and crash on a rolling market cycle; buildings age, decay, and demand maintenance or suffer structural damage.
 - **Events on independent timers** — national economic events every 15 rounds, regional development cards, government regulations every 20 rounds, and a 20-card event deck drawn on Event squares — all stacking cumulatively on the same shared prices.
@@ -108,33 +108,19 @@ a silent run is the result you want.
 
 ## Status
 
-✅ **Complete** — all six milestones. Board and loops, transactions and jail, development and
-banking and failure, the living economy, insurance and ageing, and the four §3 personalities,
-followed by a line-by-line audit of every §5 output template.
+✅ **Complete** — all six milestones, followed by a line-by-line audit of every §5 output
+template against the spec.
 
-A **round** is one lap of the board — it ends when every solvent player has passed GO, not
-after one turn each (decision **D30**), so a round spans roughly six turns per player. Every
-timed system is measured in rounds: inflation every 10, events every 15, regulations every 20,
-loan terms and policy life 20, depreciation from age 50.
-
-A **mortgage** and a **loan** are separate instruments — Rule-LK 3 has loan-locked collateral
-"continue earning rent" and bars it from being "additionally mortgaged", while Rule 7 stops a
-*mortgaged* property earning at all. Both are settled at the Bank square, one action per landing:
-LK 5's five loan actions, plus redeeming a mortgage at its current value (decision **D31**).
-
-Two deliberate readings, documented rather than hidden:
-
-- **Net worth follows Rule 15, not the introduction.** The spec states net worth twice and the
-  two disagree; Rule 15's formula carries no mortgage term (decision **D28**). A mortgaged
-  square is therefore still counted at full market value, so mortgaging raises the reported
-  figure by the cash it releases.
-- **§5 names its boomed groups regionally** ("Southern Province"), while **R3.21** and Rule-LK
-  30–33 are explicit that a *colour group* booms. The block's format is reproduced exactly; the
-  names printed are the board's own groups.
+A **round** is one lap of the board, not one turn each — it ends only once every solvent player
+has passed GO, so a round spans roughly six turns per player. Loans and insurance policies run on
+each player's own laps instead; everything else (inflation, events, regulations, depreciation)
+runs on the shared round clock. Where the spec is silent or self-contradictory, the code picks
+one reading and says so at the call site — the full log of those calls, D1 through D49, is in
+[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
 
 | Document | What it is |
 |----------|------------|
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus the spec-gap decisions **D1–D32** — including the three where the lecturer's clarifications override the PDF |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Requirements checklist traced to spec rule numbers, plus every spec-gap decision and clarification override |
 | [`docs/superpowers/specs/straight-to-jail-architecture-design.md`](docs/superpowers/specs/straight-to-jail-architecture-design.md) | Architecture rationale — the `Rent.csv` loader, the effect registry, the choke points, the round scheduler |
 | [`docs/superpowers/plans/straight-to-jail-staged.md`](docs/superpowers/plans/straight-to-jail-staged.md) | The implementation plan — six milestones, every step compiling clean and running |
 | [`docs/reference/`](docs/reference/) | Three reference notes — the C, the data structures, the economic mathematics |
