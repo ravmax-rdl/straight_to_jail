@@ -1199,8 +1199,18 @@ void declare_bankrupt(GameState *g, int p, int creditor)
     }
     pl->cash = 0;
 
+    /* The whole record, not just the two fields anything reads today. A
+       bankrupt player is skipped everywhere, so a stale rate or jail turn
+       is invisible until some future reader forgets to check -- and the
+       cost of not leaving one behind is six assignments. */
     pl->loan.active    = false;
     pl->loan.principal = 0;
+    pl->loan.ratePct   = 0;
+    pl->loan.issuedLap = 0;
+    pl->loan.termLaps  = 0;
+    pl->jailed         = false;
+    pl->jailTurns      = 0;
+    pl->sufferedLoss   = false;
 
     for (sq = 0; sq < NUM_SQUARES; sq++) {
         if (g->board[sq].owner == p) {

@@ -369,13 +369,23 @@ void final_report(const GameState *g)
 
     /* Rule 15 has two endings and one tiebreak between them. If a single
        player is still solvent they win outright; otherwise 500 rounds have
-       elapsed and the highest net worth takes it. Scanning for the best net
-       worth among the solvent covers both cases in one pass. */
+       elapsed and the highest net worth takes it.
+
+       Solvency outranks net worth and net worth breaks ties within each
+       class, rather than the solvent being scanned and everyone else
+       skipped. Skipping them left order[0] holding the title when NOBODY
+       was solvent -- reachable, because the scheduler runs to the end of
+       the round after game_over breaks the turn loop, so a closing round
+       of interest and defaults can take the last players together. The
+       block would then have named a bankrupt winner. */
     for (i = 0; i < NUM_PLAYERS; i++) {
-        if (g->players[i].bankrupt) {
+        if (g->players[i].bankrupt != g->players[winner].bankrupt) {
+            if (!g->players[i].bankrupt) {
+                winner = i;
+            }
             continue;
         }
-        if (g->players[winner].bankrupt || net_worth(g, i) > net_worth(g, winner)) {
+        if (net_worth(g, i) > net_worth(g, winner)) {
             winner = i;
         }
     }

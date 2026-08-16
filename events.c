@@ -756,15 +756,24 @@ void levy_luxury_tax(GameState *g, int p)
         base = square_value(g, sq) + building_cost(g, sq, true);
         due  = pct_of(base, 25);
 
-        printf("%s is levied on %s.\n", g->players[s->owner].name, s->name);
-        /* Inside the branch that printed, for the reason pay_income_tax
-           gives: a failed charge hands over to the Rule 14 ladder, whose
-           own blocks carry the spacing, and terminating here as well put
-           a second blank after a bankruptcy's trailing auctions. */
-        if (charge(g, s->owner, due, -1)) {
-            printf("Luxury Tax Paid : LKR %s.\n", fmt_lkr(b, due));
-            end_block();
+        printf("%s is levied on %s.\n", g->players[p].name, s->name);
+
+        /* Terminated inside the branch that printed, for the reason
+           pay_income_tax gives: a failed charge hands over to the Rule 14
+           ladder, whose own blocks carry the spacing, and terminating here as
+           well put a second blank after a bankruptcy's trailing auctions.
+
+           And the sweep stops there. Rule 14 has already taken every square
+           this player held, so the remaining hotels are the Bank's and the
+           owner test below would skip them anyway -- but going on to charge a
+           player who has just left the game reads as a bug whether or not it
+           does anything, and one more failed charge would re-enter
+           declare_bankrupt to be turned away by its own guard. */
+        if (!charge(g, p, due, -1)) {
+            return;
         }
+        printf("Luxury Tax Paid : LKR %s.\n", fmt_lkr(b, due));
+        end_block();
     }
 }
 

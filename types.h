@@ -85,6 +85,10 @@
  *                     policy therefore lapses and is rebought like any
  *                     other. The reminder stands as section 5 shows it,
  *                     and the gap is the spec's, not an omission   [LK 9]
+ * D45 Pledged assets  LK 3 bars a loan-locked square from being mortgaged,
+ *                     so a leveraged player really is the more fragile --
+ *                     the collateral is spoken for. That is the rule, not
+ *                     a gap: LK 3 lists it among five bars       [LK 3]
  * D44 Sec. 3 values   the four judgements section 3 names and never defines
  *                     EXPENSIVE GROUP = the 2 groups with the highest total
  *                     price. PREMIUM = price above the mean of the 22.
