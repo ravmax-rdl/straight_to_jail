@@ -113,7 +113,7 @@ bool charge(GameState *g, int p, int amt, int toPlayer)
 
     g->players[p].cash -= amt;
     if (toPlayer >= 0) {
-        g->players[toPlayer].cash += amt;
+        credit(g, toPlayer, amt);        /* D29 saturates there          */
     }
     return true;
 }

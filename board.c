@@ -780,11 +780,17 @@ int building_cost(const GameState *g, int sq, bool hotel)
        house-only kind therefore reaches this only when a house is being
        priced; a subsidy that discounted hotels too was giving away a
        column the rule never mentioned. */
-    cost = apply_pct(cost, effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner));
-    if (!hotel) {
-        cost = apply_pct(cost, effect_modifier(g, EFF_HOUSE_COST_MUL, sq, s->owner));
+    {
+        int mul = effect_modifier(g, EFF_BUILD_COST_MUL, sq, s->owner);
+
+        if (!hotel) {
+            mul += effect_modifier(g, EFF_HOUSE_COST_MUL, sq, s->owner);
+        }
+        /* Summed, not chained: LK 34 makes concurrent percentages
+           cumulative, so a -30% subsidy under a +10% boom prices a house
+           at -20% of base rather than at 0.7 x 1.1 (D40). */
+        return apply_pct(cost, mul);
     }
-    return cost;
 }
 
 /* LK 27: the cost of restoring one property to 100% condition -- 5% of
@@ -1056,7 +1062,9 @@ void move_player(GameState *g, int p, int steps)
         pl->passedGo = true;
         pl->laps++;                  /* D34: this player's own clock        */
 
-        pl->cash += GO_SALARY;
+        /* Through credit, not by hand: D29 saturates there, and Rule 4's
+           salary is the one payment that arrives on every lap forever. */
+        credit(g, p, GO_SALARY);
         printf("%s passed GO.\n", pl->name);
         printf("Collected LKR %s.\n", fmt_lkr(b, GO_SALARY));
         printf("Current Balance : LKR %s.\n", fmt_lkr(b, pl->cash));

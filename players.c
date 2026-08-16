@@ -121,8 +121,18 @@ static bool group_developable(const GameState *g, int p, PropertyGroup grp)
  */
 static bool purchase_permitted(const GameState *g, int p, int sq)
 {
-    int cap = effect_modifier(g, EFF_MAX_PROPERTIES, sq, p);
+    int cap;
 
+    /* The cap counts UNDEVELOPED COLOUR properties (D25), so it can only
+       bar one. Barring everything meant a player at the colour cap could
+       not buy a railway or a utility either -- squares the count does not
+       include, that can never be developed, and that no amount of holding
+       could bring the player back within the cap. */
+    if (g->board[sq].type != SQ_PROPERTY) {
+        return true;
+    }
+
+    cap = effect_modifier(g, EFF_MAX_PROPERTIES, sq, p);
     return !(cap > 0 && count_undeveloped(g, p) >= cap);
 }
 

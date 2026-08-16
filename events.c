@@ -727,10 +727,12 @@ static const EconomicEvent REGULATIONS[] = {
 };
 #define REGULATION_COUNT ((int)(sizeof REGULATIONS / sizeof REGULATIONS[0]))
 
-/* D24. LK 24 calls this tax annual but gives no per-round cadence to work
- * from, unlike LK 4, which is why D4 could take that rule literally and this
- * one cannot. A regulation runs about twenty rounds, so charging once on
- * activation is the closest available reading of "annual".
+/* D24 REVISED. LK 24 calls this tax annual and gives no cadence to work
+ * from, and this used to charge every hotel on the board once, the moment
+ * the regulation activated. A tax is paid where taxes are paid: it is levied
+ * on the TAX SQUARE, to the player who lands there, on that player's own
+ * hotels, for as long as the regulation is in force. EFF_LUXURY_TAX is a
+ * presence-only record, which is what lets the square ask.
  *
  * The base is the property's value INCLUDING its buildings, which is the only
  * reading under which "luxury" means anything -- a hotel is the luxury being
@@ -1282,7 +1284,14 @@ static void apply_card(GameState *g, int p, int card)
         effect_push(g, EFF_BUILD_COST_MUL, SCOPE_GLOBAL, 0, +10, p, CARD_ROUNDS);
         break;
     case CARD_GOVERNMENT_GRANT:
+        /* Past anyone already out. Tax Amnesty skips the bankrupt and this
+           did not, so a grant could be paid to a player with no game left
+           to spend it in -- and printed their name doing it. The drawer is
+           solvent by construction, so the walk always terminates. */
         i = rng_range(0, NUM_PLAYERS - 1);
+        while (g->players[i].bankrupt) {
+            i = (i + 1) % NUM_PLAYERS;
+        }
         credit(g, i, CARD_GRANT_AMOUNT);
         printf("%s receives LKR %s.\n", g->players[i].name,
                fmt_lkr(b, CARD_GRANT_AMOUNT));
