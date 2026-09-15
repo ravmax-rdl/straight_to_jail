@@ -1,0 +1,15 @@
+[
+  {
+    "label": "Debug (MSYS2 GDB)",
+    "adapter": "GDB",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/monopoly.exe",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "gdb_path": "C:\\Users\\ravin\\MSYS2\\ucrt64\\bin\\gdb.exe",
+    "build": {
+      "command": "C:\\Users\\ravin\\MSYS2\\usr\\bin\\make.exe",
+      "args": ["debug"],
+      "cwd": "$ZED_WORKTREE_ROOT",
+    },
+  },
+]
