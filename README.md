@@ -26,9 +26,9 @@
 <p align="center" ><img height="20px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/C/c2.svg"> <img height="20px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Linux/linux3.svg"> <img height="20px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Windows/windows3.svg">
 </p>
 
-**MONOPOLY-LK** — a fully autonomous, Sri-Lanka-themed Monopoly economic simulation in pure C. Four AI players with distinct financial personalities battle across a 40-square Colombo-to-Jaffna board through loans, insurance, inflation, disasters, and market swings. Zero user input: launch it and watch an economy play itself out over up to 500 rounds.
+**MONOPOLY-LK** — a fully autonomous, Sri-Lanka-themed Monopoly economic simulation in C. Four AI players with distinct financial personalities battle across a 40-square Colombo-to-Jaffna board through loans, insurance, inflation, disasters, and market swings. 
 
-Take-home assignment for *SCS 1301 – Data Structures and Program Design using C* (University of Colombo School of Computing). The full ruleset lives in [`assets/Assignment_1_unlocked.pdf`](assets/Assignment_1_unlocked.pdf).
+Take-home assignment for *SCS 1301 – Data Structures and Program Design using C* (University of Colombo School of Computing). The full ruleset lives in [`docs/Assignment_1_unlocked.pdf`](docs/Assignment_1_unlocked.pdf).
 
 ## The game
 
@@ -64,13 +64,14 @@ Every decision — purchases, bids, loans, insurance, construction, renovation �
 | `game.c` | Round/turn controller and the economic-cadence scheduler |
 | `main.c` | Entry point |
 
-One `GameState` struct threads through everything — no globals, no dynamic allocation, integer-only money. The heart of the simulation is a scheduler that fires interacting economic systems on staggered cycles (every 1 / 5 / 10 / 15 / 20 rounds) against shared, cumulatively-modified prices.
-
 ## Build
 
 ```bash
-make            # or the canonical grading build:
-gcc *.c -o monopoly
+gcc *.c -o monopoly     # the canonical grading build (spec §4)
+make                    # the same build, via the Makefile
+make straight_to_jail   # warnings on: -std=c99 -Wall -Wextra -pedantic
+make debug              # -g -DDEBUG, written to monopoly
+make clean
 ```
 
 ## Run
@@ -85,11 +86,6 @@ Per-property purchase prices and base rents are **read from
 [`assets/Rent.csv`](assets/Rent.csv) at runtime**, not compiled in — edit a price there and the
 next run uses it, no rebuild needed.
 
-The file is looked for at `assets/Rent.csv`, then `Rent.csv`, then `../assets/Rent.csv`, so the
-program works from either the repository root or the source directory. Give a path as the second
-argument to override the search. If the file cannot be found or is malformed, the program prints
-a diagnostic to `stderr` and exits 1 without writing anything to `stdout`.
-
 ## Verifying a build
 
 There is no test binary — the mandated `gcc *.c -o monopoly` glob cannot tolerate a second
@@ -102,21 +98,13 @@ gcc -std=c99 -Wall -Wextra -pedantic -g -DDEBUG *.c -o debug
 ./monopoly 42 > a.txt && ./monopoly 42 > b.txt && diff a.txt b.txt   # must be empty
 ```
 
-`-DDEBUG` enables invariant guards on Rule 9's even building, Rule 10's houses-or-hotel
-exclusion, LK 3's loan locks and the effect registry's capacity. They abort rather than warn, so
-a silent run is the result you want.
+## Debugging in Zed
 
-## Status
+[`.zed/debug.json`](.zed/debug.json) defines a **Debug monopoly (MSYS2 GDB)** launch
+configuration. It runs `make debug` and then starts `monopoly.exe` under the UCRT64 `gdb`. The
+`make` and `gdb` paths should point to an MSYS2 install; change the `build.command` and `gdb_path` entries.
 
-✅ **Complete** — all six milestones, followed by a line-by-line audit of every §5 output
-template against the spec.
-
-A **round** is one lap of the board, not one turn each — it ends only once every solvent player
-has passed GO, so a round spans roughly six turns per player. Loans and insurance policies run on
-each player's own laps instead; everything else (inflation, events, regulations, depreciation)
-runs on the shared round clock. Where the spec is silent or self-contradictory, the code picks
-one reading and says so at the call site — the full log of those calls, D1 through D49, is in
-[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
+## Docs
 
 | Document | What it is |
 |----------|------------|
@@ -124,19 +112,25 @@ one reading and says so at the call site — the full log of those calls, D1 thr
 | [`docs/superpowers/specs/straight-to-jail-architecture-design.md`](docs/superpowers/specs/straight-to-jail-architecture-design.md) | Architecture rationale — the `Rent.csv` loader, the effect registry, the choke points, the round scheduler |
 | [`docs/superpowers/plans/straight-to-jail-staged.md`](docs/superpowers/plans/straight-to-jail-staged.md) | The implementation plan — six milestones, every step compiling clean and running |
 | [`docs/reference/`](docs/reference/) | Three reference notes — the C, the data structures, the economic mathematics |
+| [`docs/compliance_gpt.md`](docs/compliance_gpt.md), [`docs/compliance_grok.md`](docs/compliance_grok.md) | Independent conformance reviews against the assignment PDF, with a requirements checklist and severity-ranked findings |
+| [`docs/stat_report.pdf`](docs/stat_report.pdf) | Statistical report on 1,000,000 seeded games |
+| [`docs/Assignment_1_unlocked.pdf`](docs/Assignment_1_unlocked.pdf) | The assignment specification |
 
-### Reference material
+### Results from 1,000,000 games
 
-These explain the concepts each milestone assumes, using this project's own code and numbers:
+Seeds 1 to 1,000,000 were run to completion ([`docs/stat_report.pdf`](docs/stat_report.pdf)):
 
-- [`01-c-language.md`](docs/reference/01-c-language.md) — multi-file compilation, enums, structs,
-  pointers, `const`-correctness, **reading a file without allocating**, seeded randomness and
-  modulo bias, and the bugs this project invites
-- [`02-program-design.md`](docs/reference/02-program-design.md) — modelling the board, loading
-  external data into fixed arrays, the effect registry, choke points, the round scheduler, state
-  machines, circular queues, and verifying without a test framework
-- [`03-economic-math.md`](docs/reference/03-economic-math.md) — money as `int`, rounding at the
-  boundary, composing percentages, overflow headroom, compound interest, decay models, and
-  expected value
+| Strategy | Win rate |
+|----------|----------|
+| Aggressive Investor | 43.52% |
+| Risk Taker | 27.68% |
+| Opportunistic Trader | 17.93% |
+| Conservative Banker | 10.87% |
+
+Most games end by elimination, at a median of 43 rounds. Only 5 of the million reached the
+500-round cap. In 7.08% of games the last solvent player finishes with negative net worth,
+because compound interest on an unrepaid loan grows faster than the estate. In 1,261 games the
+loan balance hits the `int32` ceiling. The report's harness (`stats/`) is not in this
+repository.
 
 <a href="/LICENSE"><img height="24px" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/LicenceMIT/licencemit1.svg"></a>
